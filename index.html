@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src https://api.openai.com wss://*.openai.com; media-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>Jeffrey & Freunde · Desktop-Assistent</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="lip-sync.css">
+  <script src="model.js" defer></script>
+  <script src="lip-sync.js" defer></script>
+  <script src="renderer.js" defer></script>
+  <script src="voice-commands.js" defer></script>
+  <script src="realtime.js" defer></script>
+  <script src="lip-sync-runtime.js" defer></script>
+  <script src="visual-preview.js" defer></script>
+</head>
+<body>
+  <main class="workspace">
+    <aside class="panel">
+      <div class="eyebrow"><span class="dot"></span> DEIN DESKTOP-BEGLEITER</div>
+      <h1>Ein kleiner<br>Moment Magie<span>.</span></h1>
+      <p class="intro" id="character-intro">Jeffrey: ein Roboterkopf, zwei Hände. Und ein freundliches Hallo aus dem Rauschen.</p>
+      <div class="divider"></div>
+      <div class="section-title">STUFE 4.3 · CHARAKTER AUSWÄHLEN</div>
+      <div class="character-cards" role="group" aria-label="Desktop-Charakter">
+        <button type="button" class="character-pick" data-character-choice="jeffrey" aria-pressed="true"><span class="mini-icon">🤖</span><span>Jeffrey</span></button>
+        <button type="button" class="character-pick" data-character-choice="kelly" aria-pressed="false"><img src="assets/kelly.png" alt=""><span>Kelly</span></button>
+        <button type="button" class="character-pick" data-character-choice="krak" aria-pressed="false"><img src="assets/krak.png" alt=""><span>Krak</span></button>
+      </div>
+      <p class="hint">Immer nur eine Figur ist aktiv. Ihr Name, ihre Stimme und die Persönlichkeit wechseln mit. Eine laufende Live-Unterhaltung wird beim Wechsel beendet (Kostenschutz).</p>
+      <div class="section-title">HOLOGRAMM AUSPROBIEREN</div>
+      <button id="appear" class="primary">Jeffrey rufen <span>↗</span></button>
+      <button id="dismiss" class="secondary">Wieder ausblenden</button>
+      <div class="quick-live" aria-label="Schneller Gesprächsstart">
+        <div class="section-title">🎙️ DIREKT SPRECHEN</div>
+        <div class="voice-row"><button id="realtime-start" class="primary" type="button">🎙️ Live sprechen</button><button id="realtime-stop" class="secondary" type="button" disabled>⏹ Beenden</button></div>
+        <p id="realtime-status" class="voice-status" role="status">Bereit · Mikrofon aus · Keine laufenden Kosten</p>
+        <p id="realtime-error" class="voice-error" role="alert" hidden></p>
+      </div>
+      <div class="section-title mode-title">ASSISTENT-MODUS</div>
+      <div class="mode-grid" role="group" aria-label="Modus wählen">
+        <button data-modechoice="active" aria-pressed="true">🟢 Aktiv</button>
+        <button data-modechoice="quiet" aria-pressed="false">🟡 Ruhe</button>
+        <button data-modechoice="sleep" aria-pressed="false">😴 Schlaf</button>
+      </div>
+      <p class="mode-description" id="mode-description">Ab und zu ein Kommentar. Auf Abruf immer da.</p>
+      <label class="toggle comment-toggle"><input id="comments" type="checkbox" checked><span>Spontane Kommentare erlauben</span></label>
+      <button id="test-comment" class="secondary">Testkommentar zeigen</button>
+      <label for="comment-frequency" class="voice-label">Wie oft darf <span class="selected-name">Jeffrey</span> sich melden?</label>
+      <select id="comment-frequency" class="voice-select">
+        <option value="rare">Selten · alle 35–55 Minuten</option>
+        <option value="normal" selected>Normal · alle 15–25 Minuten</option>
+        <option value="often">Gesprächig · alle 7–12 Minuten</option>
+      </select>
+      <label for="comment-voice" class="voice-label">Stimme für spontane Kommentare</label>
+      <select id="comment-voice" class="voice-select">
+        <option value="off">Aus · nur Hologramm-Geste, kein Ton</option>
+        <option value="windows">Windows-Stimme · kostenlos</option>
+        <option value="openai">OpenAI-Stimme der Figur · kostenpflichtig</option>
+      </select>
+      <p class="hint">Nur im Aktivmodus. OpenAI-Kommentare kosten extra: maximal 4 pro Kalendertag und mindestens 15 Minuten Abstand; ohne API-Schlüssel bleibt er still. Testkommentar kann Guthaben verbrauchen. Kein dauerhaftes Mikrofon nötig.</p>
+      <div class="section-title gesture-title">SCHWEBENDE HÄNDE & GESTEN</div>
+      <div class="gestures" role="group" aria-label="Geste wählen">
+        <button data-gesture="wave" aria-pressed="true">✧ <span>Winken</span></button>
+        <button data-gesture="point" aria-pressed="false">↖ <span>Zeigen</span></button>
+        <button data-gesture="think" aria-pressed="false">◌ <span>Nachdenken</span></button>
+        <button data-gesture="talk" aria-pressed="false">≋ <span>Erzählen</span></button>
+      </div>
+      <label class="slider-label" for="size">Robotergröße <output id="size-value">100 %</output></label>
+      <input id="size" type="range" min="50" max="150" step="5" value="100">
+      <p class="hint">Mit gedrückter linker Maustaste am Kopf oder an den Händen ziehen. Position und Größe bleiben gespeichert. Kelly und Krak haben getrennte Hände sowie ein lokales Audio-/Transkript-Viseme-Rig mit weichen Lippen- und Kieferübergängen.</p>
+      <label class="slider-label" for="intensity">Hologramm-Grisseln <output id="intensity-value">35 %</output></label>
+      <input id="intensity" type="range" min="0" max="100" value="35">
+      <label class="slider-label" for="duration">Ein- und Ausblenden <output id="duration-value">1,5 s</output></label>
+      <input id="duration" type="range" min="600" max="3000" step="100" value="1500">
+
+      <div class="native-position"><label for="corner">Bildschirmecke</label><select id="corner"><option value="bottom-right">Unten rechts</option><option value="bottom-left">Unten links</option><option value="top-right">Oben rechts</option><option value="top-left">Oben links</option><option value="free">Frei platziert</option></select></div>
+      <div class="voice-panel">
+        <div class="section-title">✨ NATÜRLICHES LIVE-GESPRÄCH</div>
+        <p class="voice-hint">OpenAI Realtime Mini · Helle Comic-Stimme voreingestellt · Direkt sprechen und Antwort hören. Per Knopf oder Codewort starten. Sage „[Name], verschwinde“, um sofort Schluss zu machen. Bei 45 Sekunden Gesprächspause automatisch aus (Sicherheitslimit: 15 Minuten).</p>
+        <label class="voice-label" for="live-voice">🎭 Live-Stimme</label>
+        <select id="live-voice" class="voice-select">
+          <option value="shimmer" selected>Shimmer · heller und weich (Vorschlag)</option>
+          <option value="coral">Coral · frisch und freundlich</option>
+          <option value="marin">Marin · bisherige Stimme</option>
+          <option value="verse">Verse · ausdrucksvoll</option>
+          <option value="sage">Sage · ruhig</option>
+          <option value="cedar">Cedar · warm</option>
+        </select>
+        <label class="voice-label" for="voice-style">Sprechstil</label>
+        <select id="voice-style" class="voice-select">
+          <option value="comic" selected>Comic · hell, verspielt und frech</option>
+          <option value="normal">Natürlich · entspannt</option>
+          <option value="energetic">Lebhaft · voller Energie</option>
+        </select>
+        <p class="voice-hint">Jede Figur hat ihr eigenes gespeichertes Stimmenprofil. Bei Charakterwechsel gilt dessen Stimme für das nächste Gespräch. Krak klingt durch Sprechregeln koboldhaft; echte Stimmverzerrung ist nicht garantiert.</p>
+        <label class="toggle"><input id="web-enabled" type="checkbox"><span>🌐 Websuche für aktuelle Fragen aktivieren (zusätzliche API-Kosten)</span></label>
+        <p class="voice-hint">Der Roboter sucht nur bei aktuellen Fragen wie Wetter, Nachrichten oder Öffnungszeiten. Maximal 2 Websuchen pro Live-Gespräch. Bei aktivierter Suche laufen Suchanfragen über OpenAI; jede Suche kostet zusätzlich Guthaben.</p>
+        <label class="toggle"><input id="browser-enabled" type="checkbox" checked><span>🌐 Webseiten öffnen und Produkte bei Idealo suchen</span></label>
+        <p class="voice-hint">Zum Beispiel: „Jeffrey, öffne YouTube“, „Öffne wikipedia.org“ oder „Jeffrey, suche bei Idealo nach einer RTX 5070“. Die Idealo-Suchergebnisse öffnen direkt in Chrome, ohne zusätzliche Websuche. Nur öffentliche HTTPS-Seiten, keine Dateien oder Windows-Befehle. Maximal vier Seiten pro Live-Gespräch. Chrome wird direkt gestartet, falls installiert.</p>
+        <div class="pc-panel">
+          <div class="section-title">💻 STUFE 3 · PC-ASSISTENT</div>
+          <label class="toggle"><input id="pc-tools-enabled" type="checkbox" checked><span>PC-Zustand prüfen und ausgewählte Programme öffnen</span></label>
+          <p class="voice-hint">Sag „Jeffrey, wie geht’s meinem PC?“ oder „Jeffrey, öffne VS Code“. Erlaubt sind nur VS Code, Editor, Rechner und Datei-Explorer. Kein PowerShell, keine beliebigen Programme, kein Löschen. Programmstart nur nach ausdrücklichem Sprachbefehl.</p>
+          <button id="pc-status-test" class="secondary" type="button">💻 PC-Status kostenlos prüfen</button>
+          <p id="pc-status-result" class="voice-status" role="status">Noch keine PC-Abfrage durchgeführt.</p>
+          <label class="toggle"><input id="pc-alerts-enabled" type="checkbox"><span>Bei hoher CPU-/RAM-Last von selbst warnen</span></label>
+          <p class="voice-hint">Standardmäßig aus. Nur im Aktivmodus mit spontanen Kommentaren; nach zwei hohen Messungen, höchstens einmal pro Stunde pro Ursache. Windows-Stimme kostenlos, optionale OpenAI-Kommentarstimme kostet Guthaben (mit dem bisherigen Tageslimit).</p>
+        </div>
+        <label class="toggle"><input id="wake-enabled" type="checkbox"><span>🎤 Im Hintergrund auf „Jeffrey“ warten (lokal)</span></label>
+        <label for="wake-sensitivity" class="voice-label">Wie empfindlich soll die Figur auf den Namen reagieren?</label>
+        <select id="wake-sensitivity" class="voice-select">
+          <option value="sensitive" selected>Empfindlich · reagiert leichter (empfohlen)</option>
+          <option value="normal">Normal · weniger Fehlalarme</option>
+          <option value="strict">Streng · nur sehr sichere Treffer</option>
+        </select>
+        <p class="voice-hint">Bei „Empfindlich“ reagiert Jeffrey zuverlässiger auf einen einzelnen Ruf, kann aber bei ähnlich klingenden Wörtern gelegentlich versehentlich erscheinen. Die Erkennung bleibt vollständig lokal und kostenlos.</p>
+        <p id="wake-status" class="voice-status" role="status">Codewort-Erkennung ist ausgeschaltet.</p>
+        <button id="wake-test" class="secondary" type="button">🔎 Codewort kostenlos testen</button>
+        <p class="voice-hint">Wenn „Lokal bereit“ nicht erscheint, die Fehlermeldung direkt darüber lesen. Zum Testen „Jeffrey“ deutlich sagen: Dabei wird keine OpenAI-Verbindung geöffnet. Im Ruhemodus verfügbar, im Schlafmodus aus. Das lokale Codewort aktiviert erst bei Treffer die kostenpflichtige Live-Verbindung. Deaktivieren stoppt das lokale Hintergrundmikrofon.</p>
+        <p class="voice-hint">Den Live-Start und Stopp findest du jetzt direkt oben unter der Charakterauswahl.</p>
+        <p class="voice-hint">🔒 Dein API-Schlüssel bleibt im Windows-Hauptprozess. Bei Live-Gesprächen werden Mikrofondaten an OpenAI übertragen und nach Nutzung abgerechnet. Kopfhörer helfen gegen Echo. Die klassische Windows-Sprachfunktion bleibt unten als Alternative erhalten.</p>
+        <div class="divider"></div>
+        <div class="section-title">💬 TEXT UND WINDOWS-SPRACHE</div>
+        <p class="voice-hint">Einmal zuhören (kein Dauer-Mikrofon). Oder Text eingeben und Enter drücken.</p>
+        <button id="voice-listen" class="primary" type="button">🎤 Einmal zuhören <span>◉</span></button>
+        <p class="voice-status" id="voice-status" role="status">Bereit. Für Windows-Diktat im Textfeld: Win + H.</p>
+        <label for="chat-input" class="voice-label">Deine Nachricht</label>
+        <textarea id="chat-input" rows="2" maxlength="1200" placeholder="Moin! Erzähl mir einen Witz …"></textarea>
+        <div class="voice-row"><button id="chat-send" class="secondary" type="button">Nachricht senden ↗</button><button id="stop-speaking" class="secondary" type="button">🔇 Stopp</button></div>
+        <div id="chat-log" class="chat-log" aria-live="polite" aria-label="Letzte Unterhaltung"></div>
+        <p id="voice-error" class="voice-error" role="alert" hidden></p>
+        <label class="toggle"><input id="speak-replies" type="checkbox" checked><span>Antworten laut sprechen</span></label>
+        <div class="memory-panel">
+          <div class="section-title">🧠 LOKALES GEDÄCHTNIS</div>
+          <label class="toggle"><input id="memory-enabled" type="checkbox"><span>Gespeicherte Merksätze für KI-Gespräche verwenden</span></label>
+          <p class="voice-hint">Standardmäßig aus. Notizen bleiben auf diesem Windows-PC. Nur bei eingeschaltetem Gedächtnis werden die gespeicherten Sätze beim Start eines KI-Gesprächs an den jeweiligen KI-Anbieter gesendet. Merke dir keine Passwörter oder Geheimnisse. Bei aktivem Gedächtnis kannst du sagen: „Jeffrey, merk dir, dass ...“.</p>
+          <label for="memory-note" class="voice-label">Merksatz (max. 220 Zeichen)</label>
+          <textarea id="memory-note" rows="2" maxlength="220" placeholder="Ich möchte, dass Jeffrey mich morgens kurz begrüßt."></textarea>
+          <button id="memory-add" type="button" class="secondary">Merksatz speichern</button>
+          <div id="memory-list" class="memory-list" aria-live="polite"></div>
+          <button id="memory-clear" class="secondary" type="button">Alle Merksätze löschen</button>
+        </div>
+        <label class="voice-label" for="ai-provider">Antwort-Modus</label>
+        <select id="ai-provider" class="voice-select">
+          <option value="offline">Ohne KI · lokale Testantworten (kostenlos)</option>
+          <option value="local">Lokaler llama.cpp-Server (127.0.0.1:8080)</option>
+          <option value="openai" selected>GPT über OpenAI-API (kostenpflichtig) · Standard</option>
+        </select>
+        <div id="key-box" class="key-box">
+          <label class="voice-label" for="api-key">OpenAI-API-Schlüssel für Live-Stimme und GPT-Text</label>
+          <input id="api-key" type="password" autocomplete="off" spellcheck="false" placeholder="sk-…"/>
+          <button id="save-api-key" class="secondary" type="button">Schlüssel geschützt speichern</button>
+          <button id="clear-api-key" class="secondary" type="button">Schlüssel löschen</button>
+          <p class="voice-hint">API-Aufrufe können Kosten verursachen. Der Schlüssel wird mit Windows-Datenschutz verschlüsselt, wenn verfügbar.</p>
+        </div>
+      </div>
+      <div class="footnote"><span class="tiny-dot"></span> Stufe 4.3 · v0.6.4 · Jeffrey, Kelly & Krak</div>
+      <p class="shortcut">Leertaste: rufen / ausblenden · Esc: ausblenden</p>
+      <p class="native-shortcut">Überall: Strg + Alt + Leertaste<br>Fenster schließen = weiter im Infobereich.<br>Dort per Rechtsklick: Modi und Beenden.</p>
+    </aside>
+    <section id="stage" aria-label="Vorschau von Jeffrey, dem Desktop-Roboter">
+      <div class="preview-label"><span class="dot"></span> LIVE-VORSCHAU <span class="preview-tag">01 / BEWEGUNG</span></div>
+      <div class="desktop-art" aria-hidden="true"><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div><div class="art-word">Raum für<br>deine Ideen.</div><div class="art-caption">DEIN BILDSCHIRM. SEIN KLEINER AUFTRITT.</div></div>
+      <div class="status"><span id="status-dot"></span><span id="status-text" role="status">Unsichtbar · bereit für seinen Auftritt</span></div>
+      <div id="robot" data-phase="hidden" data-gesture="wave" aria-hidden="true">
+        <div class="robot-float">
+          <div class="portrait-shell" aria-hidden="true">
+            <div class="portrait-avatar portrait-kelly">
+              <img class="portrait-head" src="assets/kelly-head.png" alt="">
+              <img class="portrait-hand portrait-left" src="assets/kelly-hand-left.png" alt="">
+              <img class="portrait-hand portrait-right" src="assets/kelly-hand-right.png" alt="">
+              <img class="portrait-lips" src="assets/kelly-lip-2.png" alt="">
+            </div>
+            <div class="portrait-avatar portrait-krak">
+              <img class="portrait-head" src="assets/krak-head.png" alt="">
+              <img class="portrait-hand portrait-left" src="assets/krak-hand-left.png" alt="">
+              <img class="portrait-hand portrait-right" src="assets/krak-hand-right.png" alt="">
+              <img class="portrait-lips" src="assets/krak-lip-3.png" alt="">
+            </div>
+          </div>
+          <svg class="character" viewBox="0 0 460 390" aria-label="Freundlicher Roboterkopf mit schwebenden Händen" role="img">
+            <defs>
+              <linearGradient id="shell" x1="0" y1="0" x2="0.9" y2="1"><stop stop-color="#fff6dc"/><stop offset=".42" stop-color="#e9e4d4"/><stop offset="1" stop-color="#88969e"/></linearGradient>
+              <linearGradient id="edge" x1="0" x2="1" y2="1"><stop stop-color="#b7c3c8"/><stop offset=".5" stop-color="#f6f1e1"/><stop offset="1" stop-color="#62717d"/></linearGradient>
+              <linearGradient id="screen" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#1b3444"/><stop offset=".55" stop-color="#08131f"/><stop offset="1" stop-color="#122333"/></linearGradient>
+              <radialGradient id="iris"><stop stop-color="#173553"/><stop offset=".55" stop-color="#368bcc"/><stop offset=".86" stop-color="#8aeaff"/><stop offset="1" stop-color="#d7fbff"/></radialGradient>
+              <radialGradient id="halo"><stop stop-color="#59d8ff" stop-opacity=".19"/><stop offset="1" stop-color="#59d8ff" stop-opacity="0"/></radialGradient>
+              <filter id="glow"><feGaussianBlur stdDeviation="2.6"/></filter>
+              <pattern id="lines" width="4" height="5" patternUnits="userSpaceOnUse"><path d="M0 0H4" stroke="#84efff" stroke-opacity=".13"/></pattern>
+            </defs>
+            <ellipse cx="230" cy="213" rx="206" ry="166" fill="url(#halo)"/>
+            <g class="head">
+              <rect x="80" y="108" width="42" height="112" rx="21" fill="url(#edge)" stroke="#68818e" stroke-width="2"/>
+              <rect x="89" y="131" width="9" height="65" rx="4" fill="#83eaff"/>
+              <rect x="338" y="108" width="42" height="112" rx="21" fill="url(#edge)" stroke="#68818e" stroke-width="2"/>
+              <rect x="362" y="131" width="9" height="65" rx="4" fill="#83eaff"/>
+              <rect x="104" y="60" width="252" height="222" rx="83" fill="url(#shell)" stroke="#c0d0d2" stroke-width="2"/>
+              <path d="M134 109Q158 70 218 72" fill="none" stroke="#fff9e9" stroke-width="5" stroke-linecap="round" opacity=".85"/>
+              <rect x="121" y="82" width="218" height="180" rx="66" fill="#4b5a62"/>
+              <rect x="126" y="87" width="208" height="170" rx="62" fill="url(#screen)" stroke="#738d9c" stroke-width="2"/>
+              <path d="M151 113Q184 95 214 100" stroke="#fff" stroke-opacity=".1" stroke-width="13" fill="none" stroke-linecap="round"/>
+              <g class="eyes">
+                <ellipse cx="183" cy="163" rx="30" ry="37" fill="#c3edff" opacity=".45" filter="url(#glow)"/>
+                <ellipse cx="277" cy="163" rx="30" ry="37" fill="#c3edff" opacity=".45" filter="url(#glow)"/>
+                <ellipse cx="183" cy="163" rx="27" ry="34" fill="url(#iris)"/>
+                <ellipse cx="277" cy="163" rx="27" ry="34" fill="url(#iris)"/>
+                <ellipse cx="185" cy="166" rx="13" ry="22" fill="#09233b"/>
+                <ellipse cx="275" cy="166" rx="13" ry="22" fill="#09233b"/>
+                <ellipse cx="175" cy="149" rx="8" ry="10" fill="#fff"/>
+                <ellipse cx="267" cy="149" rx="8" ry="10" fill="#fff"/>
+                <circle cx="193" cy="176" r="3" fill="#c9f6ff"/>
+                <circle cx="285" cy="176" r="3" fill="#c9f6ff"/>
+              </g>
+              <path class="brow-left" d="M159 116Q179 103 199 112" fill="none" stroke="#7adfff" stroke-width="5" stroke-linecap="round"/>
+              <path d="M260 112Q282 103 299 116" fill="none" stroke="#7adfff" stroke-width="5" stroke-linecap="round"/>
+              <ellipse cx="155" cy="198" rx="12" ry="5" fill="#a9c7ff" opacity=".18"/>
+              <ellipse cx="305" cy="198" rx="12" ry="5" fill="#a9c7ff" opacity=".18"/>
+              <path class="mouth" d="M213 207Q230 228 247 207" fill="none" stroke="#8cefff" stroke-width="6" stroke-linecap="round"/>
+              <rect x="205" y="69" width="50" height="5" rx="2.5" fill="#75dcff"/>
+              <path d="M207 271H253" stroke="#f4f7e9" stroke-width="2" stroke-linecap="round"/>
+              <rect x="126" y="87" width="208" height="170" rx="62" fill="url(#lines)"/>
+            </g>
+            <g class="hand hand-left">
+              <ellipse cx="67" cy="286" rx="31" ry="33" fill="url(#shell)" stroke="#b3c2c6" stroke-width="2"/>
+              <g fill="url(#shell)" stroke="#99aeb8" stroke-width="1.5">
+                <rect x="39" y="243" width="13" height="34" rx="6.5" transform="rotate(-20 45 260)"/>
+                <rect x="55" y="235" width="13" height="38" rx="6.5"/>
+                <rect x="72" y="238" width="13" height="36" rx="6.5" transform="rotate(12 78 256)"/>
+                <rect x="87" y="249" width="12" height="30" rx="6" transform="rotate(25 93 264)"/>
+                <rect x="27" y="280" width="15" height="29" rx="7" transform="rotate(-35 34 294)"/>
+              </g>
+              <circle cx="67" cy="289" r="12" fill="#243e50"/><circle cx="67" cy="289" r="8" fill="#83e8ff"/>
+              <ellipse cx="67" cy="324" rx="14" ry="3" fill="#92eaff" opacity=".6"/>
+            </g>
+            <g class="hand hand-right">
+              <ellipse cx="392" cy="286" rx="29" ry="31" fill="url(#shell)" stroke="#b3c2c6" stroke-width="2"/>
+              <g fill="url(#shell)" stroke="#99aeb8" stroke-width="1.5">
+                <rect x="366" y="249" width="12" height="29" rx="6" transform="rotate(-15 372 264)"/>
+                <rect class="point-finger" x="381" y="240" width="12" height="34" rx="6"/>
+                <rect x="397" y="244" width="12" height="32" rx="6" transform="rotate(12 403 260)"/>
+                <rect x="410" y="253" width="11" height="26" rx="5.5" transform="rotate(25 416 266)"/>
+                <rect x="418" y="280" width="14" height="27" rx="7" transform="rotate(30 425 294)"/>
+              </g>
+              <circle cx="392" cy="289" r="11" fill="#243e50"/><circle cx="392" cy="289" r="7" fill="#83e8ff"/>
+              <ellipse cx="392" cy="322" rx="13" ry="3" fill="#92eaff" opacity=".6"/>
+            </g>
+          </svg>
+          <canvas id="noise" width="460" height="390" aria-hidden="true"></canvas>
+          <div class="scanlines" aria-hidden="true"></div>
+          <div class="transmission"><span></span> VERBINDUNG STEHT</div>
+        </div>
+        <div id="speech" class="speech" aria-live="polite">Hallo Robin. Schön, dass du da bist.</div>
+      </div>
+      <div class="preview-footer">NUR KOPF & HÄNDE <span>LEISE IM HINTERGRUND. DA, WENN DU IHN BRAUCHST.</span></div>
+    </section>
+  </main>
+</body>
+</html>

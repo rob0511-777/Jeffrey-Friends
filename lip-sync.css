@@ -1,0 +1,7 @@
+/* Stufe 4.3, Fix v0.6.4: lokales Mund-Rig ohne künstliche Augenüberlagerung. */
+#robot .portrait-mouth-rig{position:absolute;inset:0;z-index:3;pointer-events:none;transform-origin:50% 47%;transform:translateY(calc(var(--jaw,0)*1.6px)) scaleY(calc(1 + var(--open,0)*.025));will-change:transform}
+#robot .portrait-mouth-rig .viseme-layer{opacity:0;transition:opacity 55ms linear;will-change:opacity;animation:none!important;filter:none}
+#robot[data-phase=hidden] .portrait-mouth-rig .viseme-layer{opacity:0!important}
+.lip-sync-lab{position:absolute;left:34px;bottom:74px;z-index:5;width:285px;padding:12px;border:1px solid rgba(128,225,216,.35);border-radius:11px;background:rgba(7,24,31,.9);box-shadow:0 10px 30px rgba(0,0,0,.28);display:grid;gap:7px;color:#d8f4ef;font-size:10px}
+.lip-sync-lab>strong{font-size:10px;letter-spacing:1px}.lip-sync-lab>span{color:#f4d39a;font-size:9px}.lip-sync-lab-row{display:flex;gap:5px;flex-wrap:wrap}.lip-sync-lab button{width:auto;margin:0;padding:5px 8px;border:1px solid rgba(167,235,223,.25);border-radius:6px;background:#123039;color:#dbf3ef;font-size:9px}.lip-sync-lab button:hover{background:#1b4650}.lip-sync-lab-status{color:#9ed7d3;font-size:9px;font-variant-numeric:tabular-nums}
+@media(prefers-reduced-motion:reduce){#robot .portrait-mouth-rig .viseme-layer{transition:none}}

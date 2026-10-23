@@ -1,0 +1,17 @@
+# Lokale Abhängigkeiten und temporäre Artefakte
+node_modules/
+artifacts/*.png
+.chrome-*/
+
+# Lokale Benutzer- und Schlüsseldateien
+api-key.dpapi
+settings.json
+memory.json
+comment-usage.json
+.env
+.env.*
+
+# Editor- und Betriebssystemdateien
+.DS_Store
+Thumbs.db
+*.log

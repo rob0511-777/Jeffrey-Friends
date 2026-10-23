@@ -1,0 +1,137 @@
+*{box-sizing:border-box} :root{color-scheme:dark;--ink:#eaf0ed;--muted:#8c9ca4;--mint:#a9efdb;--line:rgba(191,220,218,.12)}
+body{margin:0;background:#0e181f;color:var(--ink);font:14px/1.5 "Segoe UI",system-ui,sans-serif}button,input,select{font:inherit}button{cursor:pointer}button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--mint);outline-offset:4px}
+.workspace{display:grid;grid-template-columns:330px 1fr;min-height:100vh;max-width:1600px;margin:auto}.panel{padding:34px 28px 22px;background:linear-gradient(155deg,#1b2b32,#142027);border-right:1px solid var(--line);position:relative;z-index:2}.eyebrow{font-size:9px;letter-spacing:1.8px;font-weight:700;color:#b7d4cb;display:flex;align-items:center;gap:8px}.dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--mint);box-shadow:0 0 9px #a9efdb55}h1{font-size:33px;font-weight:450;letter-spacing:-1.4px;line-height:1.12;margin:25px 0 18px}h1>span{color:var(--mint)}.intro{font-size:12px;line-height:1.8;color:#a6b6ba}.divider{height:1px;background:var(--line);margin:25px 0}.section-title{font-size:9px;letter-spacing:1.5px;color:#98b0b6;margin-bottom:11px;font-weight:650}.primary,.secondary{width:100%;border:1px solid var(--line);border-radius:9px;padding:12px 15px;text-align:left}.primary{background:var(--mint);color:#15312c;border-color:var(--mint);font-weight:650;display:flex;justify-content:space-between}.primary:hover{background:#c5f8eb}.secondary{margin-top:8px;background:#ffffff04;color:#c1d0d3;font-size:12px;text-align:center}.secondary:hover{background:#ffffff09}.gesture-title{margin-top:25px}.gestures{display:grid;grid-template-columns:1fr 1fr;gap:8px}.gestures button{display:flex;align-items:center;gap:9px;background:#101c23;border:1px solid var(--line);color:#b4c8cf;border-radius:8px;padding:10px 11px;font-size:18px}.gestures button span{font-size:11px}.gestures button[aria-pressed=true]{border-color:#a9efdb70;background:#a9efdb10;color:#c2f4e5}.slider-label{display:flex;justify-content:space-between;font-size:11px;color:#b9c9ce;margin-top:19px}.slider-label output{color:var(--mint);font-variant-numeric:tabular-nums}input[type=range]{width:100%;accent-color:var(--mint);height:15px;margin:8px 0 0;cursor:pointer}.toggle{display:flex;gap:8px;align-items:center;font-size:10px;color:#c5d1d3;margin-top:20px;cursor:pointer}.toggle input{accent-color:var(--mint);margin:0}.hint{font-size:9px;color:#80969e;margin:5px 0 0 22px}.footnote{border-top:1px solid var(--line);padding-top:17px;margin-top:23px;font-size:9px;color:#9eb4bd;display:flex;gap:6px;align-items:center}.tiny-dot{width:4px;height:4px;border-radius:50%;background:#80969e}.shortcut,.native-shortcut{font-size:9px;color:#80969e;margin:8px 0 0}.native-position,.native-shortcut{display:none}
+#stage{position:relative;overflow:hidden;background:radial-gradient(ellipse at 70% 65%,#23414b 0%,#162932 38%,#101e26 78%);min-height:770px}.preview-label{position:absolute;top:34px;left:35px;right:35px;font-size:9px;letter-spacing:1.8px;color:#8eacb8;display:flex;align-items:center;gap:9px}.preview-tag{margin-left:auto;letter-spacing:1.5px;font-size:8px;color:#637f8d}.desktop-art{position:absolute;inset:0;overflow:hidden}.art-word{position:absolute;left:11%;top:25%;color:#abc3c81c;font-size:clamp(40px,6.5vw,96px);font-weight:300;letter-spacing:-5px;line-height:1.1}.art-caption{position:absolute;left:12%;top:56%;font-size:8px;letter-spacing:2.5px;color:#8ca7b344}.orbit{position:absolute;border:1px solid #9ce6f20a;transform:rotate(-32deg);width:780px;height:470px;border-radius:50%;right:-340px;bottom:-160px}.orbit-two{width:830px;height:530px;right:-365px;bottom:-185px}.status{position:absolute;top:76px;left:35px;display:flex;align-items:center;gap:8px;color:#8ca7b3;font-size:10px}#status-dot{height:5px;width:5px;background:#67818e;border-radius:50%}.preview-footer{position:absolute;bottom:25px;left:35px;right:35px;font-size:8px;letter-spacing:1.3px;color:#90b3c1}.preview-footer span{display:block;margin-top:5px;font-size:7px;color:#547280;letter-spacing:1px}
+#robot{position:absolute;width:400px;height:400px;right:10px;bottom:55px;opacity:0;pointer-events:none;transform-origin:center;isolation:isolate}.robot-float{position:absolute;inset:0;animation:float 5s ease-in-out infinite}.character{width:100%;height:auto;overflow:visible;filter:drop-shadow(0 0 18px #65cbff24)}.head{transform-origin:230px 170px;animation:headtilt 7s ease-in-out infinite}.eyes{transform-origin:230px 163px;animation:blink 6s infinite}.hand{transform-box:view-box}.hand-left{transform-origin:67px 286px;animation:wave 1.6s ease-in-out infinite}.hand-right{transform-origin:392px 286px;animation:handfloat 3.1s ease-in-out infinite}.mouth{transform-origin:230px 215px}#robot[data-gesture=point] .hand-left{animation:point 2.8s ease-in-out infinite}#robot[data-gesture=point] .hand-right{animation:none;transform:translate(-10px,-25px) rotate(-15deg)}#robot[data-gesture=think] .hand-left{animation:none;transform:translate(112px,-25px) rotate(25deg)}#robot[data-gesture=think] .head{animation:none;transform:rotate(-7deg)}#robot[data-gesture=think] .hand-right{opacity:.6}#robot[data-gesture=talk] .hand-left{animation:talkleft 2s ease-in-out infinite}#robot[data-gesture=talk] .hand-right{animation:talkright 2s ease-in-out infinite}#robot[data-gesture=talk] .mouth{animation:talkmouth .42s ease-in-out infinite}#robot[data-gesture=point] .point-finger{transform:translateY(-12px) scaleY(1.05)}
+#noise{position:absolute;inset:0;width:100%;height:auto;mix-blend-mode:screen;opacity:.35}.scanlines{position:absolute;inset:30px 18px 58px;background:repeating-linear-gradient(0deg,transparent 0px,transparent 3px,#9df3ff0b 4px,#9df3ff0b 5px);border-radius:45%;pointer-events:none;opacity:.4}.transmission{position:absolute;bottom:33px;left:0;right:0;text-align:center;font-size:7px;letter-spacing:2.8px;color:#9deaffaa}.transmission span{display:inline-block;width:4px;height:4px;background:#9deaff;border-radius:50%;vertical-align:1px;margin-right:6px}.speech{position:absolute;left:35px;right:35px;bottom:-21px;text-align:center;padding:9px 13px;background:#0c202aeb;border:1px solid #8de9ff30;border-radius:11px;color:#d4f5f5;font-size:11px;line-height:1.5;box-shadow:0 10px 25px #0002}#robot[data-phase=hidden] .robot-float,#robot[data-phase=hidden] .head,#robot[data-phase=hidden] .eyes,#robot[data-phase=hidden] .hand{animation-play-state:paused}
+@keyframes float{50%{transform:translateY(-9px)}}@keyframes headtilt{0%,100%{transform:rotate(-3deg)}50%{transform:rotate(3deg)}}@keyframes blink{0%,44%,48%,100%{transform:scaleY(1)}46%{transform:scaleY(.08)}}@keyframes wave{0%,100%{transform:translateY(-12px) rotate(-17deg)}50%{transform:translateY(-20px) rotate(17deg)}}@keyframes handfloat{50%{transform:translateY(-7px) rotate(7deg)}}@keyframes point{0%,100%{transform:translate(-15px,-55px) rotate(-30deg)}50%{transform:translate(-24px,-65px) rotate(-37deg)}}@keyframes talkleft{50%{transform:translate(-7px,-30px) rotate(-18deg)}}@keyframes talkright{0%,100%{transform:translate(0,-25px) rotate(12deg)}50%{transform:translate(7px,0) rotate(-8deg)}}@keyframes talkmouth{50%{transform:scaleY(.35)}}
+#robot[data-gesture=point] .hand-right g > rect:not(.point-finger){transform-box:fill-box;transform-origin:center bottom;transform:scaleY(.35)}
+body[data-mode=overlay]{background:transparent;overflow:hidden}body[data-mode=overlay] .workspace{display:block;min-height:0}body[data-mode=overlay] .panel,body[data-mode=overlay] .preview-label,body[data-mode=overlay] .desktop-art,body[data-mode=overlay] .status,body[data-mode=overlay] .preview-footer{display:none}body[data-mode=overlay] #stage{background:transparent;min-height:0;width:100vw;height:100vh}body[data-mode=overlay] #robot{width:400px;height:400px;right:10px;bottom:25px}
+body[data-mode=controls] .workspace{display:block}body[data-mode=controls] .panel{border:0;min-height:100vh}body[data-mode=controls] #stage{display:none}body[data-mode=controls] .native-position{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:16px;font-size:11px;color:#b9c9ce}select{background:#142027;border:1px solid var(--line);border-radius:5px;color:#c5d1d3;font-size:10px;padding:6px}body[data-mode=controls] .shortcut{display:none}body[data-mode=controls] .native-shortcut{display:block}
+@media(max-width:760px){.workspace{grid-template-columns:280px 1fr}.panel{padding:25px 20px}h1{font-size:29px}#robot{width:330px;height:330px;right:-25px;bottom:90px}.preview-label,.status{left:20px}.preview-tag{display:none}.art-word{font-size:50px;letter-spacing:-2px}}
+@media(max-width:560px){.workspace{display:flex;flex-direction:column}.panel{order:2}.panel h1 br{display:none}.panel h1{font-size:27px;margin:18px 0 10px}.intro br{display:none}.divider{margin:18px 0}.gestures{grid-template-columns:repeat(4,1fr)}.gestures button{flex-direction:column;gap:0}#stage{min-height:480px;order:1}.art-word{top:25%;font-size:46px}#robot{width:320px;height:320px;right:0;bottom:52px}.status{top:63px}.preview-label{top:27px}.preview-footer{bottom:13px}.art-caption{display:none}}
+@media(prefers-reduced-motion:reduce){.robot-float,.head,.eyes,.hand,.mouth{animation:none!important}}
+
+/* Desktop 0.2: die Moduswahl ist auch im kleinen Einstellungsfenster erreichbar. */
+.mode-title{margin-top:20px}
+.mode-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.mode-grid button{border:1px solid var(--line);border-radius:8px;background:#101c23;color:#b4c8cf;padding:9px 4px;font-size:11px}
+.mode-grid button[aria-pressed=true]{background:#a9efdb16;border-color:#a9efdb80;color:#bdf5de}
+.mode-description{font-size:10px;color:#a4bec4;margin:8px 0 0}
+.comment-toggle{margin-top:14px}
+#test-comment{padding:9px;margin-top:9px}
+body[data-mode=controls] .panel{height:100vh;overflow-y:auto;padding-top:24px;padding-bottom:32px}
+body[data-mode=controls] h1{font-size:28px;margin:14px 0 10px}
+body[data-mode=controls] .intro{margin:0}
+body[data-mode=controls] .divider{margin:15px 0}
+body[data-mode=controls] .gesture-title{margin-top:15px}
+body[data-mode=controls] .slider-label{margin-top:12px}
+body[data-mode=overlay] #robot .speech{bottom:-10px}
+
+/* 0.2.1 – native Windows-Ziehfläche, ohne Veränderung der Roboterzeichnung. */
+:root{--robot-scale:1}
+body[data-mode=overlay] #robot{
+  width:calc(400px * var(--robot-scale));
+  height:calc(400px * var(--robot-scale));
+  right:calc(10px * var(--robot-scale));
+  bottom:calc(25px * var(--robot-scale));
+  -webkit-app-region:drag;
+  app-region:drag;
+  -webkit-user-select:none;
+  user-select:none;
+}
+body[data-mode=overlay] #stage{-webkit-app-region:no-drag;app-region:no-drag}
+body[data-mode=overlay] #robot{-webkit-app-region:drag;app-region:drag}
+body[data-mode=overlay] #robot .speech{bottom:calc(-10px * var(--robot-scale));font-size:calc(11px * var(--robot-scale))}
+body[data-mode=overlay] #robot .transmission{font-size:calc(7px * var(--robot-scale))}
+/* Auf der Figur dürfen Mausaktionen verarbeitet werden; die übrigen Pixel bleiben click-through. */
+body[data-mode=overlay] #robot{pointer-events:auto}
+
+/* 0.3: einfache Sprachsteuerung und Gesprächsfenster, Figur bewusst unverändert. */
+.voice-panel{margin-top:25px;border-top:1px solid var(--line);padding-top:15px}
+.voice-hint{color:#91abb4;font-size:10px;line-height:1.5;margin:8px 0}
+.voice-status{font-size:10px;color:#a9efdb;line-height:1.5;margin:9px 0 12px;overflow-wrap:anywhere}
+.voice-label{display:block;font-size:10px;color:#b9cbd0;margin:12px 0 5px}
+#chat-input{width:100%;min-height:65px;resize:vertical;background:#0d1b22;border:1px solid #719b9f50;border-radius:8px;color:#efffff;font:12px/1.5 "Segoe UI",sans-serif;padding:9px;box-sizing:border-box}
+#chat-input:focus,#api-key:focus{outline:2px solid #91ead1}
+.voice-row{display:flex;gap:8px}.voice-row button:first-child{flex:2}.voice-row button:last-child{flex:1}
+.voice-row .secondary{margin-top:8px;padding:9px 6px}
+.chat-log{margin-top:12px;max-height:175px;min-height:30px;overflow:auto;border:1px solid #89a8ac21;border-radius:8px;padding:7px;background:#0c181e}
+.chat-message{font-size:11px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere;margin:7px 0;color:#d2e6eb}
+.chat-message strong{color:#a9efdb}.chat-message.user strong{color:#a7baff}
+.voice-error{font-size:10px;color:#ffd3bd;background:#552b2540;padding:8px;border-radius:7px;overflow-wrap:anywhere}
+.voice-panel .toggle{margin-top:12px}
+.voice-select{display:block;width:100%;max-width:100%;font-size:10px;padding:8px;white-space:normal}
+#api-key{width:100%;box-sizing:border-box;padding:8px;background:#07161c;color:#fff;border:1px solid #729295;border-radius:5px}
+.key-box[hidden]{display:none}
+body[data-mode=controls] .panel{height:100vh;overflow-y:auto}
+body[data-mode=overlay] #robot[data-speaking=true] .mouth{animation:talkmouth .32s ease-in-out infinite}
+
+/* Version 0.3.1 – Realtime-Status */
+#realtime-start { flex:1; }
+#realtime-stop { flex:1; }
+#realtime-status { padding:9px 10px; border:1px solid rgba(123,222,255,.2);border-radius:8px;background:rgba(72,144,171,.08); }
+
+/* 0.3.4: keine eingeblendeten Untertitel und keine Texte unter der Desktop-Figur. */
+body[data-mode=overlay] #robot .speech, body[data-mode=overlay] #robot .transmission {display:none!important}
+#wake-test{margin:4px 0 10px;padding:9px 10px}
+
+/* Gewünscht: keine Schrift direkt unter der Figur, auch in der Browser-Vorschau. */
+#robot .speech, #robot .transmission{display:none!important}
+
+/* Stufe 3: PC-Assistent mit bewusstem Opt-in für Warnungen */
+.pc-panel{margin-top:16px;padding:14px 0;border-top:1px solid var(--line)}
+#pc-status-test{padding:9px 10px;margin-top:10px}
+#pc-status-result{border:1px solid #719b9f35;border-radius:7px;padding:8px;background:#0a171d}
+
+/* Stufe 2: sichtbar kontrollierbares, rein lokales Merkzettel-Gedächtnis */
+.memory-panel{margin-top:18px;border-top:1px solid var(--line);padding-top:14px}
+#memory-note{width:100%;box-sizing:border-box;background:#0d1b22;color:#ecfbff;border:1px solid #719b9f50;border-radius:8px;padding:9px;font:12px/1.45 "Segoe UI",sans-serif;resize:vertical}
+.memory-list{margin-top:10px;max-height:220px;overflow:auto;border:1px solid #719b9f35;border-radius:8px;padding:7px;color:#bcd6df;font-size:11px;line-height:1.4}
+.memory-item{display:flex;align-items:center;gap:8px;padding:6px 4px;border-bottom:1px solid #719b9f22}.memory-item:last-child{border-bottom:0}.memory-item span{flex:1;overflow-wrap:anywhere}
+.memory-item button{width:auto;flex:0 0 auto;font-size:10px;padding:5px;margin:0}
+#memory-add,#memory-clear{margin-top:8px;padding:8px 10px}
+
+/* Stufe 4.1 – schwebende Game-Charaktere mit getrennten animierten Händen. */
+#robot .portrait-shell{position:absolute;inset:0;pointer-events:none;display:none}
+.quick-live{margin:14px 0 20px;padding:12px;background:#0b292d;border:1px solid #75ddbe77;border-radius:11px}
+.quick-live .section-title{color:#c3f9e7;font-size:10px;margin:0 0 8px}
+.quick-live .voice-row{align-items:stretch}
+.quick-live .primary,.quick-live .secondary{margin-top:0;text-align:center;justify-content:center;padding:12px 7px;font-size:12px}
+.quick-live #realtime-status{margin:8px 0 0;padding:6px;background:#163c42;font-size:10px}
+.quick-live #realtime-error{margin-top:7px}
+#robot .portrait-shell{filter:drop-shadow(0 6px 12px #11171dcc)}
+#robot .portrait-avatar{position:absolute;inset:0;display:none;width:100%;height:100%;transform-origin:50% 45%;animation:avatar-float 4.5s ease-in-out infinite}
+#robot .portrait-avatar img{display:block;position:absolute;inset:0;width:100%;height:100%;object-fit:contain;max-width:none;max-height:none;animation:none;transform-origin:center;pointer-events:none}
+#robot[data-character=kelly] .portrait-kelly,#robot[data-character=krak] .portrait-krak{display:block}
+#robot .portrait-avatar .portrait-hand{transform-origin:center;filter:drop-shadow(0 3px 6px #1116)}
+#robot .portrait-avatar .portrait-left{animation:avatar-left-wave 3.0s ease-in-out infinite}
+#robot .portrait-avatar .portrait-right{animation:avatar-right-wave 3.6s ease-in-out infinite}
+#robot[data-gesture=point] .portrait-avatar .portrait-left{animation:avatar-point .95s ease-in-out infinite alternate}
+#robot[data-gesture=think] .portrait-avatar .portrait-right{animation:avatar-thinking 2s ease-in-out infinite}
+#robot[data-gesture=talk] .portrait-avatar .portrait-left{animation:avatar-left-talk 0.85s ease-in-out infinite alternate}
+#robot[data-gesture=talk] .portrait-avatar .portrait-right{animation:avatar-right-talk 1s ease-in-out infinite alternate}
+@keyframes avatar-float{0%,100%{transform:translateY(2px)}50%{transform:translateY(-5px)}}
+@keyframes avatar-left-wave{0%,100%{transform:translate(-1px,0) rotate(-1deg)}50%{transform:translate(-5px,-7px) rotate(2deg)}}
+@keyframes avatar-right-wave{0%,100%{transform:translate(1px,1px) rotate(1deg)}50%{transform:translate(5px,-7px) rotate(-2deg)}}
+@keyframes avatar-left-talk{from{transform:translate(-2px,-1px) rotate(-1deg)}to{transform:translate(-10px,-8px) rotate(4deg)}}
+@keyframes avatar-right-talk{from{transform:translate(0,0) rotate(0deg)}to{transform:translate(9px,-9px) rotate(-5deg)}}
+@keyframes avatar-point{from{transform:translate(0,0)}to{transform:translate(-10px,-10px)}}
+@keyframes avatar-thinking{50%{transform:translate(-7px,-9px)}}
+#robot[data-phase=hidden] .portrait-avatar,#robot[data-phase=hidden] .portrait-hand,#robot[data-phase=hidden] .portrait-lips{animation-play-state:paused}
+@media(prefers-reduced-motion:reduce){#robot .portrait-avatar,#robot .portrait-avatar .portrait-hand,#robot .portrait-avatar .portrait-lips{animation:none!important}}
+
+
+#robot[data-character=kelly] .character,#robot[data-character=krak] .character{display:none}
+#robot[data-character=kelly] .portrait-shell,#robot[data-character=krak] .portrait-shell{display:flex}
+
+/* Stufe 4.2: kompakte Charakterauswahl ohne übergroße Bilder. */
+.character-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin:9px 0}
+.character-pick{display:flex;align-items:center;justify-content:center;flex-direction:column;gap:4px;min-width:0;min-height:82px;padding:8px 4px;border-radius:10px;border:1px solid var(--line);background:#0c1c24;color:#d4e6e7;font-weight:600;font-size:11px}
+.character-pick[aria-pressed=true]{background:#a9efdb14;border-color:#98e9d9;box-shadow:inset 0 0 0 1px #98e9d922}
+.character-pick img{display:block;width:46px!important;height:46px!important;max-width:46px!important;max-height:46px!important;object-fit:cover;object-position:center 31%;border-radius:50%;border:1px solid #8be9e64a;box-shadow:0 2px 9px #0007}
+.character-pick .mini-icon{font-size:31px;width:46px;height:46px;display:grid;place-items:center;line-height:1}
+/* Statt des künstlichen Balkens werden echte Pixel der Lippen aus der ursprünglichen Figur in fünf Stellungen deformiert und weich übergeblendet. */
+#robot .portrait-avatar .portrait-lips{opacity:0;animation:none!important;filter:none;transition:opacity .07s ease-in-out}
+#robot.is-speaking .portrait-avatar .portrait-lips{opacity:1}
+#robot[data-phase=hidden] .portrait-avatar .portrait-lips{opacity:0}

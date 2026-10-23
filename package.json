@@ -1,0 +1,15 @@
+{
+  "name": "desktop-roboter",
+  "version": "0.6.4",
+  "private": true,
+  "description": "Stufe 4.3 – Jeffrey, Kelly und Krak mit lokaler Audio-/Transkript-Viseme-Animation",
+  "main": "main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test tests/*.test.cjs",
+    "visual-test": "start \"\" VORSCHAU.html"
+  },
+  "devDependencies": {
+    "electron": "45.0.0"
+  }
+}
