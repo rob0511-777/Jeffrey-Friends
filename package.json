@@ -1,8 +1,8 @@
 {
   "name": "desktop-roboter",
-  "version": "0.7.2",
+  "version": "0.7.4",
   "private": true,
-  "description": "Version 0.7.2 – James, kultivierter britischer Butler als fuenfter Buddy",
+  "description": "Version 0.7.4 – Hybrid-KI, Gemini Live und Kostenkontrolle",
   "main": "main.cjs",
   "scripts": {
     "start": "electron .",

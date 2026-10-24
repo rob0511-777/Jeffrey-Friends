@@ -4,7 +4,7 @@ const {character,names,normalizeProfiles}=require('./characters.cjs');
 const MODES = Object.freeze(['active', 'quiet', 'sleep']);
 const CORNERS = Object.freeze(['bottom-right', 'bottom-left', 'top-right', 'top-left', 'free']);
 const GESTURES = Object.freeze(['wave', 'point', 'think', 'talk']);
-const AI_PROVIDERS = Object.freeze(['offline','local','openai']);
+const AI_PROVIDERS = Object.freeze(['openai','gemini','local','auto']);
 const LIVE_VOICES = Object.freeze(['shimmer','coral','marin','verse','sage','cedar','ash']);
 const VOICE_STYLES = Object.freeze(['comic','normal','energetic']);
 const COMMENT_VOICES = Object.freeze(['off','windows','openai']);
@@ -12,7 +12,27 @@ const COMMENT_FREQUENCIES = Object.freeze(['rare','normal','often']);
 const WAKE_SENSITIVITIES = Object.freeze(['sensitive','normal','strict']);
 const BRONCO_VOICE_EFFECTS=Object.freeze(['off','rough','hard','extreme']);
 const JEFFREY_VOICE_EFFECTS=Object.freeze(['off','light','tin','robot']);
-const DEFAULTS = Object.freeze({character:'jeffrey',mode:'active', comments:true, corner:'bottom-right', position:null, size:100, intensity:35, duration:1500, aiProvider:'openai', speakReplies:true, readComments:false, wakeEnabled:false, wakeSensitivity:'sensitive', liveVoice:'shimmer', voiceStyle:'comic', webEnabled:false, browserEnabled:true, memoryEnabled:false, pcToolsEnabled:true, pcAlertsEnabled:false, commentVoice:'off', commentFrequency:'normal', broncoVoiceEffect:'hard', jeffreyVoiceEffect:'tin'});
+const DEFAULT_PRICING=Object.freeze({version:'2026-10-24',currency:'EUR',openai:Object.freeze({textInput:0.60,textOutput:2.40,audioInput:10,audioOutput:20,webSearchPer1000:10}),gemini:Object.freeze({textInput:0.75,textOutput:4.50,audioInput:3,audioOutput:12,webSearchPer1000:14}),local:Object.freeze({textInput:0,textOutput:0,audioInput:0,audioOutput:0,webSearchPer1000:0})});
+const DEFAULTS = Object.freeze({character:'jeffrey',mode:'active', comments:true, corner:'bottom-right', position:null, size:100, intensity:35, duration:1500, aiProvider:'openai', pricing:DEFAULT_PRICING, localBaseUrl:'http://127.0.0.1:11434/v1', localModel:'', geminiModel:'gemini-3.8-live', autoPaidFallback:false, monthlyBudgetEur:0, blockPaidAtBudget:false, speakReplies:true, readComments:false, wakeEnabled:false, wakeSensitivity:'sensitive', liveVoice:'shimmer', voiceStyle:'comic', webEnabled:false, browserEnabled:true, memoryEnabled:false, pcToolsEnabled:true, pcAlertsEnabled:false, commentVoice:'off', commentFrequency:'normal', broncoVoiceEffect:'hard', jeffreyVoiceEffect:'tin'});
+
+function safeModel(value, fallback='') {
+  return typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,119}$/.test(value) ? value : fallback;
+}
+function safeLocalBaseUrl(value) {
+  try {
+    const parsed=new URL(typeof value==='string'?value:'');
+    const host=parsed.hostname.toLowerCase();
+    if(!['localhost','127.0.0.1','[::1]','::1'].includes(host) || !['http:','https:'].includes(parsed.protocol) || parsed.username || parsed.password || parsed.search || parsed.hash) return DEFAULTS.localBaseUrl;
+    parsed.pathname=parsed.pathname.replace(/\/+$/,'')||'/v1';
+    return parsed.toString().replace(/\/$/,'');
+  } catch { return DEFAULTS.localBaseUrl; }
+}
+
+function normalizePricing(input={}) {
+  const out={version:'2026-10-24',currency:'EUR'};
+  for(const provider of ['openai','gemini','local']){out[provider]={};for(const key of ['textInput','textOutput','audioInput','audioOutput','webSearchPer1000']){const value=Number(input?.[provider]?.[key]);out[provider][key]=Number.isFinite(value)?Math.max(0,Math.min(100000,value)):DEFAULT_PRICING[provider][key];}}
+  return out;
+}
 
 function normalizeSettings(input = {}) {
   const v = input && typeof input === 'object' ? input : {};
@@ -35,9 +55,17 @@ function normalizeSettings(input = {}) {
   return {
     character:selectedCharacter,characterProfiles,
     mode,
-    aiProvider: AI_PROVIDERS.includes(v.aiProvider) ? v.aiProvider : DEFAULTS.aiProvider,
+    // 'offline' remains readable for legacy profiles but is not shown as a selectable provider.
+    aiProvider: AI_PROVIDERS.includes(v.aiProvider) || v.aiProvider === 'offline' ? v.aiProvider : DEFAULTS.aiProvider,
     // Kennzeichen für die einmalige Übernahme älterer gespeicherter KI-Einstellungen.
     aiProviderDefaultMigrated: true,
+    pricing:normalizePricing(v.pricing),
+    localBaseUrl:safeLocalBaseUrl(v.localBaseUrl),
+    localModel:safeModel(v.localModel),
+    geminiModel:safeModel(v.geminiModel,DEFAULTS.geminiModel),
+    autoPaidFallback:typeof v.autoPaidFallback==='boolean'?v.autoPaidFallback:DEFAULTS.autoPaidFallback,
+    monthlyBudgetEur:asNumber(v.monthlyBudgetEur,DEFAULTS.monthlyBudgetEur,0,100000),
+    blockPaidAtBudget:typeof v.blockPaidAtBudget==='boolean'?v.blockPaidAtBudget:DEFAULTS.blockPaidAtBudget,
     speakReplies: typeof v.speakReplies === 'boolean' ? v.speakReplies : DEFAULTS.speakReplies,
     readComments: typeof v.readComments === 'boolean' ? v.readComments : DEFAULTS.readComments,
     comments: typeof v.comments === 'boolean' ? v.comments : DEFAULTS.comments,
@@ -107,4 +135,4 @@ function nextCommentDelay(random = Math.random, frequency='normal') {
   const [min,max]=ranges[frequency]||ranges.normal;
   return (min + Math.floor(random() * (max-min))) * 60 * 1000;
 }
-module.exports = {MODES, CORNERS, GESTURES, AI_PROVIDERS, LIVE_VOICES, VOICE_STYLES, COMMENT_VOICES, COMMENT_FREQUENCIES, WAKE_SENSITIVITIES, BRONCO_VOICE_EFFECTS, JEFFREY_VOICE_EFFECTS, DEFAULTS, normalizeSettings, migrateStartupSettings, canSpontaneouslyComment, pickPhrase, nextCommentDelay};
+module.exports = {MODES, DEFAULT_PRICING, normalizePricing, CORNERS, GESTURES, AI_PROVIDERS, LIVE_VOICES, VOICE_STYLES, COMMENT_VOICES, COMMENT_FREQUENCIES, WAKE_SENSITIVITIES, BRONCO_VOICE_EFFECTS, JEFFREY_VOICE_EFFECTS, DEFAULTS, normalizeSettings, migrateStartupSettings, canSpontaneouslyComment, pickPhrase, nextCommentDelay};

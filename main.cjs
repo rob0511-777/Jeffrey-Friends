@@ -4,7 +4,7 @@ const {app, BrowserWindow, ipcMain, screen, globalShortcut, Menu, Tray, safeStor
 app.commandLine.appendSwitch('autoplay-policy','no-user-gesture-required');
 const path = require('node:path');
 const {localReply, remoteReply} = require('./brain.cjs');
-const {createRealtimeSession, validateOffer} = require('./realtime-service.cjs');
+const {createRealtimeSession, validateOffer, WEB_TOOL, BROWSER_TOOL, IDEALO_TOOL, PC_STATUS_TOOL, APP_TOOL} = require('./realtime-service.cjs');
 const {searchWeb, validateSearchQuery} = require('./web-search.cjs');
 const {parseWebsiteCommand, parseIdealoCommand, searchIdealo, openInBrowser} = require('./browser-open.cjs');
 const {listenOnce, speak} = require('./voicing.cjs');
@@ -14,7 +14,12 @@ const fs = require('node:fs');
 const {readNotes,addNote,removeNote,clearNotes} = require('./memory.cjs');
 const {synthesizeComment,canUseOpenAICommentVoice} = require('./comment-speech.cjs');
 const {extractMemoryCommand,isExplicitMemoryRequest}=require('./memory-commands.cjs');
-const {displayName,character,CHARACTERS,switchCharacter}=require('./characters.cjs');
+const {displayName,character,characterPrompt,CHARACTERS,switchCharacter}=require('./characters.cjs');
+const {createKeyStore}=require('./secure-keys.cjs');
+const {createCostTracker}=require('./cost-tracker.cjs');
+const {createLocalProvider}=require('./providers/local-provider.cjs');
+const {createGeminiLiveProvider}=require('./providers/gemini-live-provider.cjs');
+const {createProviderManager}=require('./provider-manager.cjs');
 const {MODES, CORNERS, GESTURES, AI_PROVIDERS, LIVE_VOICES, VOICE_STYLES, COMMENT_VOICES, COMMENT_FREQUENCIES, WAKE_SENSITIVITIES, BRONCO_VOICE_EFFECTS, JEFFREY_VOICE_EFFECTS, normalizeSettings, migrateStartupSettings, canSpontaneouslyComment, pickPhrase, nextCommentDelay} = require('./settings.cjs');
 
 let controls, overlay, tray, settings, file;
@@ -23,9 +28,9 @@ let commentTimer = null, hideTimer = null, saveTimer = null;
 let hitCheckTimer = null, acceptsPointer = false, manuallyMoved = false;
 const ALLOWED = new Set(['show','hide','toggle','gesture','intensity','duration','corner','size','mode','comments','test-comment','open-controls',
   'chat','listen','stop-speaking','ai-provider','speak-replies','read-comments','save-api-key','clear-api-key','realtime-activity','wake-enabled','wake-test','wake-sensitivity','live-voice','voice-style','bronco-voice-effect','jeffrey-voice-effect','web-enabled','browser-enabled',
-  'character','memory-enabled','memory-add','memory-remove','memory-clear','pc-tools-enabled','pc-alerts-enabled','pc-status-test','comment-voice','comment-frequency','comment-audio-ended']);
+  'character','memory-enabled','memory-add','memory-remove','memory-clear','local-base-url','local-model','gemini-model','auto-paid-fallback','monthly-budget','block-paid-budget','pricing','save-provider-key','clear-provider-key','response-usage','pc-tools-enabled','pc-alerts-enabled','pc-status-test','comment-voice','comment-frequency','comment-audio-ended']);
 let talking = null, listening = null, chatBusy = false, voiceBusy = false, talkSerial = 0;
-let sessionKey = '';
+let keyStore=null,costTracker=null,localProvider=null,geminiProvider=null,providerManager=null,geminiSession=null,geminiSessionId='',liveSessionId='';
 let rtConnectionInProgress = false, rtLastStart = 0, liveActive = false;
 let webCalls = 0, lastWebCall = 0;
 let browserCalls=0, lastBrowserCall=0;
@@ -39,21 +44,44 @@ let lastPhraseText='';
 let lastAppRequest=null, lastSpokenAt=0, lastUserTranscript="", appLaunches=0, pcStatusCalls=0, pcMonitor=null, pcBusy=false, pcHighCount=0;
 const lastPcAlert={cpu:0,memory:0};
 let lastChatAt = 0;
-function apiKeyFile() {return path.join(app.getPath('userData'), 'api-key.dpapi');}
-function readAPIKey() {
-  if (sessionKey) return sessionKey;
-  try { if (safeStorage.isEncryptionAvailable()) return safeStorage.decryptString(fs.readFileSync(apiKeyFile())); }
-  catch {} return '';
-}
-function saveAPIKey(value) {
-  if (typeof value !== 'string' || !/^sk-[^\s]{10,300}$/.test(value.trim()))
-    throw new Error('Bitte einen gültigen OpenAI-API-Schlüssel eingeben.');
-  sessionKey = value.trim();
-  if (safeStorage.isEncryptionAvailable()) {
-    fs.writeFileSync(apiKeyFile(), safeStorage.encryptString(sessionKey));
-    return 'API-Schlüssel verschlüsselt in deinem Windows-Benutzerprofil gespeichert.';
+function readAPIKey() {return keyStore?.read('openai')||'';}
+function saveAPIKey(value) {if(!keyStore)throw new Error('Schlüsselablage noch nicht bereit.');return keyStore.save('openai',value);}
+function selectedRealtimeProvider(){
+  if(settings.aiProvider==='openai'||settings.aiProvider==='gemini')return settings.aiProvider;
+  if(settings.aiProvider==='local')throw new Error('Lokaler Modus bietet Text, aber kein vollständiges Realtime-Audio.');
+  if(settings.aiProvider==='auto'){
+    if(!settings.autoPaidFallback)throw new Error('Automatik darf kostenpflichtige Audioanbieter erst nach ausdrücklicher Freigabe verwenden.');
+    if(keyStore?.status().gemini)return 'gemini';
+    if(keyStore?.status().openai)return 'openai';
+    throw new Error('Automatik findet keinen freigegebenen Audioanbieter. Bitte einen API-Schlüssel speichern.');
   }
-  return 'Verschlüsselung nicht verfügbar: Schlüssel gilt nur bis zum Beenden.';
+  return 'openai';
+}
+function stopGemini(reason='beendet'){if(geminiSession){try{geminiSession.stop(reason);}catch{}geminiSession=null;geminiSessionId='';}}
+function providerModel(provider){return provider==='gemini'?settings.geminiModel:provider==='local'?(settings.localModel||'nicht gewählt'):'gpt-realtime-2.1-mini';}
+function providerStatus(warning=''){const selected=settings?settings.aiProvider:'openai';let active=selected;if(selected==='auto'){try{active=selectedRealtimeProvider();}catch{active='auto';}}return {activeProvider:active,model:providerModel(active),keys:keyStore?.status()||{openai:false,gemini:false},summary:costTracker?.summary({sessionId:liveSessionId,monthlyBudgetEur:settings?.monthlyBudgetEur,blockPaidAtBudget:settings?.blockPaidAtBudget})||{},warning:String(warning||'').slice(0,220)};}
+function sendProviderStatus(warning=''){if(controls&&!controls.isDestroyed()&&!controls.webContents.isLoading())controls.webContents.send('robot:action',{action:'provider-status',value:providerStatus(warning)});}
+function requirePaidBudget(){const result=costTracker.budgetCheck({monthlyBudgetEur:settings.monthlyBudgetEur,blockPaidAtBudget:settings.blockPaidAtBudget,isNewPaidSession:true});if(result.newWarnings.length)sendProviderStatus('Budgetwarnung: '+result.newWarnings.join(' %, ')+' % erreicht.');if(!result.allowed)throw new Error('Lokales Monatsbudget erreicht: Neue kostenpflichtige Gespräche sind blockiert.');return result;}
+function geminiToolDeclarations(){
+  const tools=[];if(settings.webEnabled)tools.push(WEB_TOOL);if(settings.browserEnabled)tools.push(BROWSER_TOOL,IDEALO_TOOL);if(settings.pcToolsEnabled)tools.push(PC_STATUS_TOOL,APP_TOOL);
+  return tools.map(({name,description,parameters})=>({name,description,parameters}));
+}
+async function handleGeminiTool(call){
+  if(!geminiSession||!call||typeof call.name!=='string')return;const args=call.args||{};let output='Aktion nicht verfügbar.';
+  try{
+    if(call.name==='get_pc_status'){
+      if(!settings.pcToolsEnabled||pcStatusCalls>=5)throw new Error('PC-Status ist deaktiviert oder das Limit ist erreicht.');pcStatusCalls++;output=formatStatus(await systemSnapshot());
+    }else if(call.name==='launch_application'){
+      const id=resolveApp(args.app);const explicit=Boolean(id&&lastAppRequest&&!lastAppRequest.used&&lastAppRequest.id===id&&Date.now()-lastAppRequest.at<30000);if(!settings.pcToolsEnabled||!explicit||appLaunches>=3)throw new Error('Kein aktueller ausdrücklicher Programmstart erkannt.');lastAppRequest.used=true;appLaunches++;const opened=await launchApplication(id);output='Programm geöffnet: '+opened.title;
+    }else if(call.name==='search_idealo'){
+      if(!settings.browserEnabled||browserCalls>=4)throw new Error('Idealo-Suche deaktiviert oder Limit erreicht.');const opened=await searchIdealo(args.query,{shell});browserCalls++;output='Idealo-Suche geöffnet: '+opened.query;
+    }else if(call.name==='open_website'){
+      if(!settings.browserEnabled||browserCalls>=4)throw new Error('Browserfunktion deaktiviert oder Limit erreicht.');const opened=await openInBrowser(args.website,{shell});browserCalls++;output='Webseite geöffnet: '+opened.url;
+    }else if(call.name==='web_search'){
+      if(!settings.webEnabled||webCalls>=2||!validateSearchQuery(args.query))throw new Error('Websuche deaktiviert, ungültig oder Limit erreicht.');requirePaidBudget();const key=readAPIKey();if(!key)throw new Error('Für Websuche fehlt der OpenAI-Schlüssel.');webCalls++;const found=await searchWeb(args.query,key);costTracker.record({sessionId:liveSessionId,provider:'openai',model:'gpt-4.1-mini',category:'web_search',source:'estimated',units:{requests:1}});sendProviderStatus();output=found;
+    }
+  }catch(error){output='Aktion nicht möglich: '+String(error?.message||error).slice(0,240);}
+  try{geminiSession?.sendToolResponse(call.id,call.name,typeof output==='string'?output:JSON.stringify(output));}catch{}
 }
 const who=()=>displayName(settings?.character);
 function status(message) {sendAction('voice-status', String(message));}
@@ -125,7 +153,9 @@ async function doChat(text) {
       if(settings.mode!=='sleep'){clearHideTimer();hideTimer=setTimeout(hideRobot,10000);}
       return;
     }
-    const reply = await remoteReply(prompt,messages,settings,readAPIKey,settings.memoryEnabled?readNotes(memoryFile):[]);
+    if(settings.aiProvider==='openai')requirePaidBudget();
+    const textSessionId='text-'+Date.now();
+    const reply = await remoteReply(prompt,messages,settings,readAPIKey,settings.memoryEnabled?readNotes(memoryFile):[],{localProvider,onUsage:usage=>{costTracker.record({sessionId:textSessionId,...usage});sendProviderStatus();}});
     if (settings.mode === 'sleep') return;
     const safe = String(reply||'').slice(0,1400);
     messages.push({role:'user',content:prompt},{role:'assistant',content:safe});
@@ -262,7 +292,7 @@ function hideRobot() {
   if(talking) stopTalking();
   sendAction('speaking',false);
   // Ausblenden darf kein kostenpflichtiges Gespräch im Hintergrund weiterlaufen lassen.
-  if (liveActive) sendAction('realtime-stop');
+  if (liveActive) {sendAction('realtime-stop');stopGemini('Figur ausgeblendet');}
   clearHideTimer(); autoShowing = false; robotVisible = false;
   sendAction('hide'); updateMousePassThrough();
 }
@@ -444,11 +474,13 @@ function handleAction(event, payload) {
     const kind = value.kind;
     if (kind === 'opened') {
       if (settings.mode === 'sleep') {sendAction('realtime-stop');return;}
+      if(!liveSessionId)liveSessionId='live-'+Date.now();
       liveActive=true;webCalls=0;lastWebCall=0;browserCalls=0;lastBrowserCall=0;appLaunches=0;pcStatusCalls=0;lastAppRequest=null;lastSpokenAt=0;lastUserTranscript="";
       syncWakeListener();updateMenu();
       clearHideTimer();autoShowing=true;robotVisible=true;
       sendAction('show');updateMousePassThrough();
     } else if (kind === 'closed') {
+      stopGemini('Renderer geschlossen');providerManager?.endSession(liveSessionId);liveSessionId='';
       liveActive=false;
       if (tray) updateMenu();
       sendAction('speaking',false);
@@ -485,10 +517,14 @@ function handleAction(event, payload) {
     }
     return;
   }
+  if(action==='response-usage'){
+    if(!liveActive||!value||typeof value!=='object')return;
+    costTracker.record({sessionId:liveSessionId,provider:value.provider==='gemini'?'gemini':'openai',model:String(value.model||providerModel(value.provider)).slice(0,120),category:value.category==='web_search'?'web_search':'audio',source:value.source==='reported'?'reported':'estimated',units:value.units||{}});sendProviderStatus();return;
+  }
   if (action === 'character') {
     if(!Object.hasOwn(CHARACTERS,value)||value===settings.character)return;
     // Keine live audio Sitzung mit falscher visueller Identität weiterlaufen lassen.
-    if(liveActive){sendAction('realtime-stop');liveActive=false;}
+    if(liveActive){sendAction('realtime-stop');stopGemini('Charakterwechsel');liveActive=false;}
     if(wakeListener){wakeListener.stop();wakeListener.reset();}
     clearTimeout(wakeTestTimer);wakeTestUntil=0;
     stopTalking();messages=[];hideRobot();
@@ -528,7 +564,22 @@ function handleAction(event, payload) {
   else if (action === 'listen') void doListen();
   else if (action === 'stop-speaking') stopTalking();
   else if (action === 'ai-provider' && AI_PROVIDERS.includes(value)) {
-    settings.aiProvider=value;messages=[];storeSoon();syncState();status(`KI-Modus: ${value}`);
+    if(liveActive){sendAction('realtime-stop');stopGemini('Anbieterwechsel');liveActive=false;}
+    settings.aiProvider=value;messages=[];storeSoon();syncState();sendProviderStatus();status(`KI-Modus: ${value}`);
+  } else if(action==='local-base-url'||action==='local-model'||action==='gemini-model'||action==='monthly-budget'||action==='auto-paid-fallback'||action==='block-paid-budget'||action==='pricing'){
+    const patch={...settings};
+    if(action==='local-base-url')patch.localBaseUrl=value;
+    if(action==='local-model')patch.localModel=value;
+    if(action==='gemini-model')patch.geminiModel=value;
+    if(action==='monthly-budget')patch.monthlyBudgetEur=value;
+    if(action==='auto-paid-fallback')patch.autoPaidFallback=Boolean(value);
+    if(action==='block-paid-budget')patch.blockPaidAtBudget=Boolean(value);
+    if(action==='pricing')patch.pricing=value;
+    settings=normalizeSettings(patch);costTracker.setPricing(settings.pricing);storeSoon();syncState();sendProviderStatus();
+  } else if(action==='save-provider-key'){
+    try{if(!value||value.provider!=='gemini')throw new Error('Unbekannter Schlüsselanbieter.');status(keyStore.save('gemini',value.value));sendProviderStatus();}catch(e){errorNotice(e.message);}
+  } else if(action==='clear-provider-key'){
+    if(value==='gemini'){keyStore.clear('gemini');status('Gemini-API-Schlüssel gelöscht.');sendProviderStatus();}
   } else if (action === 'live-voice' && LIVE_VOICES.includes(value)) {
     settings.liveVoice=value;settings.characterProfiles[settings.character].voice=value;storeSoon();syncState();status('Neue Live-Stimme gilt ab dem nächsten Gespräch.');
   } else if (action === 'bronco-voice-effect' && BRONCO_VOICE_EFFECTS.includes(value)) {
@@ -545,9 +596,9 @@ function handleAction(event, payload) {
     settings[action === 'speak-replies'?'speakReplies':'readComments']=Boolean(value);
     storeSoon();syncState();
   } else if (action === 'save-api-key') {
-    try {status(saveAPIKey(value));}catch(e){errorNotice(e.message);}
+    try {status(saveAPIKey(value));sendProviderStatus();}catch(e){errorNotice(e.message);}
   } else if (action === 'clear-api-key') {
-    sessionKey='';try{fs.rmSync(apiKeyFile(),{force:true});}catch{}status('API-Schlüssel gelöscht.');
+    keyStore.clear('openai');status('OpenAI-API-Schlüssel gelöscht.');sendProviderStatus();
   }
   else if (action === 'corner' && CORNERS.includes(value)) {
     if (value === 'free') {
@@ -570,7 +621,13 @@ else {
   app.on('second-instance', showControls);
   app.whenReady().then(() => {
     settings = loadSettings();
-    memoryFile=path.join(app.getPath('userData'),'memory.json');
+    const userData=app.getPath('userData');
+    keyStore=createKeyStore({fs,path,userData,safeStorage});
+    costTracker=createCostTracker({file:path.join(userData,'ai-cost-usage.json'),fs,pricing:settings.pricing});
+    localProvider=createLocalProvider({fetchImpl:fetch});
+    geminiProvider=typeof globalThis.WebSocket==='function'?createGeminiLiveProvider({WebSocketCtor:globalThis.WebSocket}):null;
+    providerManager=createProviderManager({providers:{openai:{id:'openai'},gemini:{id:'gemini'},local:localProvider}});
+    memoryFile=path.join(userData,'memory.json');
     Menu.setApplicationMenu(null);
     overlay = makeWindow({width:420, height:450, frame:false, transparent:true,
       alwaysOnTop:true, skipTaskbar:true, resizable:false, focusable:false,
@@ -601,15 +658,42 @@ else {
     ses.setPermissionCheckHandler((wc, permission) =>
       wc === controls.webContents && permission === 'media' && settings.mode !== 'sleep');
     ipcMain.on('robot:action', handleAction);
+    ipcMain.handle('robot:provider-status',event=>{if(event.sender!==controls.webContents)throw new Error('Nicht zugelassene Anfrage.');return providerStatus();});
+    ipcMain.handle('robot:local-models',async(event,baseUrl)=>{if(event.sender!==controls.webContents)throw new Error('Nicht zugelassene Anfrage.');return localProvider.listModels(baseUrl);});
+    ipcMain.handle('robot:gemini-start',async(event)=>{
+      if(event.sender!==controls.webContents||settings.mode==='sleep')throw new Error('Gemini Live ist im Schlafmodus nicht verfügbar.');
+      if(selectedRealtimeProvider()!=='gemini')throw new Error('Gemini ist nicht als aktueller Audioanbieter ausgewählt.');
+      if(!geminiProvider)throw new Error('Diese Laufzeit unterstützt Gemini WebSocket nicht.');
+      if(geminiSession)throw new Error('Gemini-Sitzung läuft bereits.');
+      requirePaidBudget();
+      const key=keyStore.read('gemini');if(!key)throw new Error('Bitte zuerst den Gemini-API-Schlüssel speichern.');
+      liveSessionId='gemini-'+Date.now();geminiSessionId=liveSessionId;providerManager.beginSession(liveSessionId,'gemini');
+      const voices={jeffrey:'Puck',kelly:'Aoede',krak:'Fenrir',bronco:'Orus',james:'Charon'};
+      geminiSession=geminiProvider.start({apiKey:key,model:settings.geminiModel,instruction:characterPrompt(settings.character),voice:voices[settings.character]||'Puck',tools:geminiToolDeclarations(),onEvent:message=>{
+        if(message.type==='usage'){costTracker.record({sessionId:liveSessionId,provider:'gemini',model:settings.geminiModel,category:'audio',source:message.source,units:message.units});sendProviderStatus();}
+        if(message.type==='user'){lastUserTranscript=message.text;const wanted=parseAppCommand(message.text);lastAppRequest=wanted?{id:wanted,at:Date.now(),used:false}:null;}
+        if(message.type==='tool-call')void handleGeminiTool(message);
+        if(controls&&!controls.isDestroyed())controls.webContents.send('robot:gemini-event',{sessionId:geminiSessionId,...message});
+        if(message.type==='closed'){providerManager.endSession(liveSessionId);geminiSession=null;geminiSessionId='';}
+      }});
+      return {sessionId:liveSessionId,model:settings.geminiModel,notice:'Gemini verwendet eine andere Stimme als OpenAI.'};
+    });
+    ipcMain.on('robot:gemini-audio',(event,payload)=>{
+      if(event.sender!==controls.webContents||!geminiSession||payload?.sessionId!==geminiSessionId||typeof payload?.data!=='string'||payload.data.length>262144)return;
+      try{geminiSession.sendAudio(payload.data);}catch(e){controls.webContents.send('robot:gemini-event',{sessionId:geminiSessionId,type:'error',message:String(e.message).slice(0,220)});}
+    });
+    ipcMain.handle('robot:gemini-stop',(event,sessionId)=>{if(event.sender!==controls.webContents)throw new Error('Nicht zugelassene Anfrage.');if(sessionId===geminiSessionId)stopGemini('Nutzerstopp');return true;});
     ipcMain.handle('robot:realtime-connect', async (event, offerSDP) => {
       if (event.sender !== controls.webContents || settings.mode === 'sleep')
         throw new Error('Live-Gespräch nur im aktiven Einstellungsfenster möglich.');
       // Die Stimme darf auch bei verstecktem Einstellungsfenster gestartet werden (Codewort).
+      if(selectedRealtimeProvider()!=='openai')throw new Error('OpenAI ist nicht als aktueller Audioanbieter ausgewählt.');
+      requirePaidBudget();
       if (!validateOffer(offerSDP)) throw new Error('Ungültiges WebRTC-Verbindungsangebot.');
       if (rtConnectionInProgress || Date.now() - rtLastStart < 3000) throw new Error('Verbindung läuft bereits oder wurde gerade gestartet.');
       const key = readAPIKey();
       if (!key) throw new Error('Bitte zuerst deinen OpenAI-API-Schlüssel unten speichern.');
-      rtConnectionInProgress = true;rtLastStart=Date.now();
+      rtConnectionInProgress = true;rtLastStart=Date.now();liveSessionId='openai-'+Date.now();providerManager.beginSession(liveSessionId,'openai');
       try {
         const answer = await createRealtimeSession(offerSDP,key,fetch,settings,settings.memoryEnabled?readNotes(memoryFile):[]);
         if (settings.mode === 'sleep') throw new Error('Verbindung nach Schlafmodus verworfen.');
@@ -632,10 +716,11 @@ else {
       if(!validateSearchQuery(query))throw new Error('Bitte eine kürzere Suchanfrage verwenden.');
       // Höchstens 2 Suchanfragen pro Gespräch, damit die Kosten kontrollierbar bleiben.
       if(webCalls>=2)throw new Error('Suchlimit von zwei Suchen pro Gespräch erreicht.');
+      requirePaidBudget();
       if(Date.now()-lastWebCall<2500)throw new Error('Bitte kurz vor der nächsten Suche warten.');
       webCalls++;lastWebCall=Date.now();
       const key=readAPIKey();if(!key)throw new Error('Kein API-Schlüssel vorhanden.');
-      return searchWeb(query,key);
+      const result=await searchWeb(query,key);costTracker.record({sessionId:liveSessionId,provider:'openai',model:'gpt-4.1-mini',category:'web_search',source:'estimated',units:{requests:1}});sendProviderStatus();return result;
     });
     ipcMain.handle('robot:pc-status',async(event)=>{
       if(!controls||event.sender!==controls.webContents||settings.mode==='sleep'||!settings.pcToolsEnabled||!liveActive)
@@ -707,7 +792,7 @@ Nur dieses Programm wird geöffnet.`,
     if (settings && file) { try { fs.writeFileSync(file, JSON.stringify(settings, null, 2), 'utf8'); } catch {} }
     if (wakeListener) wakeListener.stop();
     clearTimeout(wakeTestTimer);
-    if (listening) listening.stop();stopTalking();
+    if (listening) listening.stop();stopTalking();stopGemini('App beendet');
     clearTimeout(commentTimer); clearHideTimer(); clearInterval(hitCheckTimer);clearInterval(pcMonitor); globalShortcut.unregisterAll();
   });
   // Wichtig: Beim Schließen des Einstellungsfensters bleibt der Tray-Roboter aktiv.
