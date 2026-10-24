@@ -167,21 +167,74 @@
           <div id="memory-list" class="memory-list" aria-live="polite"></div>
           <button id="memory-clear" class="secondary" type="button">Alle Merksätze löschen</button>
         </div>
-        <label class="voice-label" for="ai-provider">Antwort-Modus</label>
-        <select id="ai-provider" class="voice-select">
-          <option value="offline">Ohne KI · lokale Testantworten (kostenlos)</option>
-          <option value="local">Lokaler llama.cpp-Server (127.0.0.1:8080)</option>
-          <option value="openai" selected>GPT über OpenAI-API (kostenpflichtig) · Standard</option>
-        </select>
-        <div id="key-box" class="key-box">
-          <label class="voice-label" for="api-key">OpenAI-API-Schlüssel für Live-Stimme und GPT-Text</label>
-          <input id="api-key" type="password" autocomplete="off" spellcheck="false" placeholder="sk-…"/>
-          <button id="save-api-key" class="secondary" type="button">Schlüssel geschützt speichern</button>
-          <button id="clear-api-key" class="secondary" type="button">Schlüssel löschen</button>
-          <p class="voice-hint">API-Aufrufe können Kosten verursachen. Der Schlüssel wird mit Windows-Datenschutz verschlüsselt, wenn verfügbar.</p>
+        <div class="provider-panel">
+          <div class="section-title">🤖 KI-ANBIETER &amp; KOSTEN</div>
+          <label class="voice-label" for="ai-provider">KI-Modus</label>
+          <select id="ai-provider" class="voice-select">
+            <option value="openai" selected>OpenAI · Qualität · bestehende Stimmen</option>
+            <option value="gemini">Gemini · Sparmodus · andere Stimmen</option>
+            <option value="local">Lokal · Offline-Text über eigenen Server</option>
+            <option value="auto">Automatisch · Kosten optimieren</option>
+          </select>
+          <p id="provider-description" class="voice-hint">OpenAI ist der bewährte Standard. Jeffrey- und Bronco-Filter sowie alle Charakterprofile bleiben unverändert.</p>
+
+          <div id="local-provider-box" class="key-box" hidden>
+            <label class="voice-label" for="local-base-url">Lokale OpenAI-kompatible Serveradresse</label>
+            <input id="local-base-url" type="url" value="http://127.0.0.1:11434/v1" spellcheck="false">
+            <label class="voice-label" for="local-model">Lokales Modell</label>
+            <input id="local-model" type="text" maxlength="120" placeholder="z. B. llama3.2 oder qwen2.5">
+            <button id="load-local-models" class="secondary" type="button">Lokale Modelle prüfen</button>
+            <p id="local-model-status" class="voice-status" role="status">Textmodus: Ollama, LM Studio oder llama.cpp auf diesem PC. Kein vollständiges Realtime-Audio.</p>
+          </div>
+
+          <div id="gemini-key-box" class="key-box" hidden>
+            <label class="voice-label" for="gemini-model">Gemini-Live-Modell</label>
+            <input id="gemini-model" type="text" maxlength="120" value="gemini-3.8-live" spellcheck="false">
+            <label class="voice-label" for="gemini-api-key">Gemini-API-Schlüssel</label>
+            <input id="gemini-api-key" type="password" autocomplete="off" spellcheck="false" placeholder="AQ.… oder AIza…">
+            <button id="save-gemini-key" class="secondary" type="button">Gemini-Schlüssel geschützt speichern</button>
+            <button id="clear-gemini-key" class="secondary" type="button">Gemini-Schlüssel löschen</button>
+            <p class="voice-hint">Neue Gemini-Authorization Keys können mit AQ. beginnen; ältere Standard-Keys mit AIza werden ebenfalls akzeptiert. Gemini-Stimmen klingen anders als die OpenAI-Stimmen. Das Free Tier ist nicht unbegrenzt kostenlos und je nach Region/Konto nicht garantiert. Bei unbezahlten Diensten kann Google Inhalte zur Produktverbesserung verwenden; keine sensiblen Daten senden. In EWR, Schweiz und Vereinigtem Königreich gelten besondere Paid-Service-Bedingungen.</p>
+          </div>
+
+          <div id="key-box" class="key-box">
+            <label class="voice-label" for="api-key">OpenAI-API-Schlüssel für Live-Stimme und GPT-Text</label>
+            <input id="api-key" type="password" autocomplete="off" spellcheck="false" placeholder="sk-…">
+            <button id="save-api-key" class="secondary" type="button">Schlüssel geschützt speichern</button>
+            <button id="clear-api-key" class="secondary" type="button">Schlüssel löschen</button>
+            <p class="voice-hint">OpenAI-API-Aufrufe können Kosten verursachen. Der Schlüssel wird mit Windows-Datenschutz verschlüsselt, wenn verfügbar.</p>
+          </div>
+
+          <label class="toggle"><input id="auto-paid-fallback" type="checkbox"><span>Im Automatikmodus kostenpflichtige Cloud-Audioanbieter ausdrücklich erlauben</span></label>
+          <p class="voice-hint">Ohne diese Freigabe wechselt Automatik niemals selbstständig zu Gemini oder OpenAI. Anbieterwechsel erfolgen nur zwischen Sitzungen; es gibt keine doppelten Anfragen.</p>
+          <label class="voice-label" for="monthly-budget">Lokales Monatsbudget in Euro (0 = keine Grenze)</label>
+          <input id="monthly-budget" type="number" min="0" max="100000" step="0.01" value="0">
+          <label class="toggle"><input id="block-paid-budget" type="checkbox"><span>Neue kostenpflichtige Gespräche bei 100 % lokal blockieren</span></label>
+          <p class="voice-hint">Warnungen erscheinen bei 50 %, 80 % und 100 %. Das lokale Software-Budget ist keine garantierte serverseitige Ausgabensperre; Nutzungsdaten können fehlen oder verspätet sein.</p>
+
+          <div class="cost-summary" aria-label="Lokale Kostenschätzung">
+            <p><strong>Aktiv:</strong> <span id="cost-provider">OpenAI</span> · <span id="cost-model">gpt-realtime-2.1-mini</span></p>
+            <p><strong>Gespräch:</strong> <span id="cost-session">0,00 €</span> · <strong>Heute:</strong> <span id="cost-day">0,00 €</span></p>
+            <p><strong>Monat:</strong> <span id="cost-month">0,00 €</span> · <strong>Websuche:</strong> <span id="cost-web">0,00 €</span></p>
+            <p><strong>Nach Anbieter:</strong> OpenAI <span id="cost-openai">0,00 €</span> · Gemini <span id="cost-gemini">0,00 €</span> · Lokal <span id="cost-local">0,00 €</span></p>
+            <details class="pricing-settings"><summary>Preisannahmen bearbeiten (EUR je 1 Mio. Tokens / Web je 1000 Aufrufe)</summary>
+              <label class="voice-label" for="price-openai-text-input">OpenAI Text Input</label><input class="price-input" id="price-openai-text-input" type="number" min="0" max="100000" step="0.01" value="0.60">
+              <label class="voice-label" for="price-openai-text-output">OpenAI Text Output</label><input class="price-input" id="price-openai-text-output" type="number" min="0" max="100000" step="0.01" value="2.40">
+              <label class="voice-label" for="price-openai-audio-input">OpenAI Audio Input</label><input class="price-input" id="price-openai-audio-input" type="number" min="0" max="100000" step="0.01" value="10">
+              <label class="voice-label" for="price-openai-audio-output">OpenAI Audio Output</label><input class="price-input" id="price-openai-audio-output" type="number" min="0" max="100000" step="0.01" value="20">
+              <label class="voice-label" for="price-gemini-text-input">Gemini Text Input</label><input class="price-input" id="price-gemini-text-input" type="number" min="0" max="100000" step="0.01" value="0.75">
+              <label class="voice-label" for="price-gemini-text-output">Gemini Text Output</label><input class="price-input" id="price-gemini-text-output" type="number" min="0" max="100000" step="0.01" value="4.50">
+              <label class="voice-label" for="price-gemini-audio-input">Gemini Audio Input</label><input class="price-input" id="price-gemini-audio-input" type="number" min="0" max="100000" step="0.01" value="3">
+              <label class="voice-label" for="price-gemini-audio-output">Gemini Audio Output</label><input class="price-input" id="price-gemini-audio-output" type="number" min="0" max="100000" step="0.01" value="12">
+              <label class="voice-label" for="price-openai-web">OpenAI Websuche je 1000 Aufrufe</label><input class="price-input" id="price-openai-web" type="number" min="0" max="100000" step="0.01" value="10">
+              <p class="voice-hint">Stichtag der Vorgaben: 24.10.2026. Änderungen gelten für neue Nutzungseinträge; Anbieterpreise bitte regelmäßig prüfen.</p>
+            </details>
+            <p id="cost-quality" class="voice-hint">Noch keine gemeldete Nutzung. Werte sind Schätzungen und keine Anbieterrechnung bzw. kein offizieller Rechnungssaldo.</p>
+            <p id="budget-status" class="voice-status" role="status">Kein lokales Monatsbudget gesetzt.</p>
+          </div>
         </div>
       </div>
-      <div class="footnote"><span class="tiny-dot"></span> v0.7.2 · Jeffrey, Kelly, Krak, Bronco & James</div>
+      <div class="footnote"><span class="tiny-dot"></span> v0.7.4 · Jeffrey, Kelly, Krak, Bronco & James</div>
       <p class="shortcut">Leertaste: rufen / ausblenden · Esc: ausblenden</p>
       <p class="native-shortcut">Überall: Strg + Alt + Leertaste<br>Fenster schließen = weiter im Infobereich.<br>Dort per Rechtsklick: Modi und Beenden.</p>
     </aside>

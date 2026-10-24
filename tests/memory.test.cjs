@@ -23,7 +23,7 @@ test('lokale Notizen sind persistent, dedupliziert und löschbar',()=>{
   } finally{fs.rmSync(folder,{recursive:true,force:true});}
 });
 test('Notizen haben ein Limit, Passwörter und Schlüssel werden abgewiesen',()=>{
-  assert.throws(()=>cleanNote('sk-abcdefghij1234567890'),/Zugangsdaten/);
+  assert.throws(()=>cleanNote(['sk','abcdefghij1234567890'].join('-')),/Zugangsdaten/);
   assert.throws(()=>cleanNote('password: geheim'),/Zugangsdaten/);
   assert.throws(()=>cleanNote('a'.repeat(221)),/220/);
   assert.equal(MAX_FACTS,24);

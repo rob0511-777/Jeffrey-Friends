@@ -13,6 +13,7 @@
   let current = null;
   let isSleeping = false;
   let activeCharacter='jeffrey';
+  let activeProvider='openai';
   let broncoVoiceEffect='hard';
   let jeffreyVoiceEffect='tin';
   const characterName=()=>({jeffrey:'Jeffrey',kelly:'Kelly',krak:'Krak',bronco:'Bronco',james:'James'})[activeCharacter]||'Jeffrey';
@@ -34,8 +35,10 @@
     if (!c) return;
     current = null;
     c.stopped = true;
-    clearTimeout(c.timer);clearTimeout(c.idleTimer);clearInterval(c.broncoHealthTimer);clearInterval(c.jeffreyHealthTimer);
+    clearTimeout(c.timer);clearTimeout(c.idleTimer);clearTimeout(c.geminiSetupTimer);clearInterval(c.broncoHealthTimer);clearInterval(c.jeffreyHealthTimer);
     try {c.stream?.getTracks().forEach(track=>track.stop());}catch{}
+    try {if(c.geminiSessionId)void native.stopGemini(c.geminiSessionId);}catch{}
+    try {c.geminiProcessor?.disconnect();c.geminiInputContext?.close();c.geminiOutputContext?.close();}catch{}
     try {c.dc?.close();}catch{}
     try {c.broncoEffect?.stop();}catch{}
     try {c.jeffreyEffect?.stop();}catch{}
@@ -128,6 +131,10 @@
     } else if (event.type === 'conversation.item.input_audio_transcription.failed') {
       c.appTranscriptSeen=true;
     } else if (event.type === 'response.done') {
+      if(event.response?.usage){
+        const usage=event.response.usage,inputAudio=Number(usage.input_token_details?.audio_tokens||usage.input_tokens_details?.audio_tokens)||0,outputAudio=Number(usage.output_token_details?.audio_tokens||usage.output_tokens_details?.audio_tokens)||0;
+        native.send('response-usage',{provider:'openai',model:'gpt-realtime-2.1-mini',category:'audio',source:'reported',units:{inputTextTokens:Math.max(0,(Number(usage.input_tokens)||0)-inputAudio),outputTextTokens:Math.max(0,(Number(usage.output_tokens)||0)-outputAudio),inputAudioTokens:inputAudio,outputAudioTokens:outputAudio}});
+      }
       c.botSpeaking=false;extendConversation(c);signal('idle');
       if (event.response?.status === 'failed') {
         fail('Die Sprachantwort ist fehlgeschlagen. Prüfe API-Guthaben und Modellzugriff.');
@@ -138,9 +145,42 @@
       cleanup('Sitzung von OpenAI beendet. Mikrofon aus.');
     }
   }
+  function pcm16Base64(float32,inputRate){
+    const ratio=inputRate/16000,length=Math.max(1,Math.floor(float32.length/ratio)),bytes=new Uint8Array(length*2);const view=new DataView(bytes.buffer);
+    for(let i=0;i<length;i++){const start=Math.floor(i*ratio),end=Math.max(start+1,Math.floor((i+1)*ratio));let sum=0;for(let j=start;j<end&&j<float32.length;j++)sum+=float32[j];const sample=Math.max(-1,Math.min(1,sum/Math.max(1,end-start)));view.setInt16(i*2,sample<0?sample*32768:sample*32767,true);}
+    let binary='';for(let i=0;i<bytes.length;i+=8192)binary+=String.fromCharCode(...bytes.subarray(i,i+8192));return btoa(binary);
+  }
+  async function setupGeminiOutput(c){
+    if(c.geminiOutputContext)return;
+    const AudioContext=window.AudioContext||window.webkitAudioContext;c.geminiOutputContext=new AudioContext({sampleRate:24000});
+    c.geminiDestination=c.geminiOutputContext.createMediaStreamDestination();c.geminiAudio=document.createElement('audio');c.geminiAudio.autoplay=true;c.geminiAudio.hidden=true;c.geminiAudio.srcObject=c.geminiDestination.stream;document.body.appendChild(c.geminiAudio);
+    const jeffrey=activeCharacter==='jeffrey'&&jeffreyVoiceEffect!=='off'&&window.JeffreyVoiceEffect?.create,bronco=activeCharacter==='bronco'&&broncoVoiceEffect!=='off'&&window.BroncoVoiceEffect?.create;
+    c.geminiAudio.muted=Boolean(jeffrey||bronco);void c.geminiAudio.play().catch(()=>{});void window.JeffreyLipSyncRuntime?.attachStream(c.geminiDestination.stream);
+    if(jeffrey)c.jeffreyEffect=await window.JeffreyVoiceEffect.create(c.geminiDestination.stream,undefined,jeffreyVoiceEffect);
+    if(bronco)c.broncoEffect=await window.BroncoVoiceEffect.create(c.geminiDestination.stream,undefined,broncoVoiceEffect);
+    if((jeffrey&&!c.jeffreyEffect?.directOutput)||(bronco&&!c.broncoEffect?.directOutput))c.geminiAudio.muted=false;
+    c.nextGeminiAudio=c.geminiOutputContext.currentTime;
+  }
+  async function playGeminiAudio(c,data,sampleRate=24000){
+    if(current!==c||c.stopped)return;await setupGeminiOutput(c);const raw=atob(data),length=Math.floor(raw.length/2),buffer=c.geminiOutputContext.createBuffer(1,length,sampleRate),channel=buffer.getChannelData(0),view=new DataView(new ArrayBuffer(raw.length));for(let i=0;i<raw.length;i++)view.setUint8(i,raw.charCodeAt(i));for(let i=0;i<length;i++)channel[i]=view.getInt16(i*2,true)/32768;
+    const source=c.geminiOutputContext.createBufferSource();source.buffer=buffer;source.connect(c.geminiDestination);const at=Math.max(c.geminiOutputContext.currentTime+0.02,c.nextGeminiAudio||0);source.start(at);c.nextGeminiAudio=at+buffer.duration;c.botSpeaking=true;signal('speaking');extendConversation(c);
+  }
+  async function startGemini(fromWake=false){
+    errorBox.hidden=true;const c={provider:'gemini',stream:null,geminiSessionId:'',geminiReady:false,geminiProcessor:null,geminiInputContext:null,geminiOutputContext:null,geminiDestination:null,geminiAudio:null,broncoEffect:null,jeffreyEffect:null,fromWake:Boolean(fromWake),timer:null,idleTimer:null,geminiSetupTimer:null,stopped:false,userSpeaking:false,botSpeaking:false,toolsInFlight:0};
+    current=c;setButtons();signal('opened');extendConversation(c);c.timer=setTimeout(()=>cleanup('15-Minuten-Sicherheitslimit erreicht. Mikrofon aus.'),MAX_SESSION_MS);
+    try{
+      c.stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true},video:false});if(c.stopped){c.stream.getTracks().forEach(t=>t.stop());return;}
+      const started=await native.startGemini({fromWake:Boolean(fromWake)});c.geminiSessionId=started.sessionId;status(started.notice+' Verbindung wird aufgebaut …');c.geminiSetupTimer=setTimeout(()=>{if(current===c&&!c.geminiReady)cleanup('Gemini hat das Sitzungs-Setup nicht bestätigt. Prüfe Modell, API-Key-Typ und Gemini-Live-Zugriff.',false);},12000);
+      const AudioContext=window.AudioContext||window.webkitAudioContext;c.geminiInputContext=new AudioContext();const source=c.geminiInputContext.createMediaStreamSource(c.stream);c.geminiProcessor=c.geminiInputContext.createScriptProcessor(4096,1,1);const silent=c.geminiInputContext.createGain();silent.gain.value=0;source.connect(c.geminiProcessor);c.geminiProcessor.connect(silent);silent.connect(c.geminiInputContext.destination);
+      c.geminiProcessor.onaudioprocess=e=>{if(current===c&&!c.stopped&&c.geminiReady)native.sendGeminiAudio(c.geminiSessionId,pcm16Base64(e.inputBuffer.getChannelData(0),c.geminiInputContext.sampleRate));};
+    }catch(error){if(current===c)cleanup(String(error?.message||error||'Gemini Live fehlgeschlagen.'),false);}
+  }
   async function start(fromWake=false) {
     if (!native || mode!=='controls' || current || isSleeping) return;
     errorBox.hidden=true;
+    try{const state=await native.getProviderStatus();activeProvider=state.activeProvider||'openai';}catch{activeProvider='openai';}
+    if(activeProvider==='local'||activeProvider==='auto'){fail('Der lokale Modus bietet Text, aber kein vollständiges Realtime-Audio.');return;}
+    if(activeProvider==='gemini'){await startGemini(fromWake);return;}
     const c={pc:null,stream:null,dc:null,audio:null,broncoEffect:null,broncoHealthTimer:null,jeffreyEffect:null,jeffreyHealthTimer:null,fromWake:Boolean(fromWake),timer:null,idleTimer:null,stopped:false,userSpeaking:false,botSpeaking:false,toolsInFlight:0,seenCalls:new Set(),rememberTranscriptSeen:false,appTranscriptSeen:false};
     current=c;setButtons();signal('opened');extendConversation(c);
     c.timer=setTimeout(()=>cleanup('15-Minuten-Sicherheitslimit erreicht. Mikrofon aus.'),MAX_SESSION_MS);
@@ -282,6 +322,17 @@
   startButton.addEventListener('click',()=>start(false));
   stopButton.addEventListener('click',()=>cleanup());
   if(native){
+    native.onGeminiEvent?.(message=>{
+      const c=current;if(!c||c.provider!=='gemini'||message?.sessionId!==c.geminiSessionId)return;
+      if(message.type==='opened'){status('Gemini Live: WebSocket geöffnet, Setup wird bestätigt …');extendConversation(c);}
+      else if(message.type==='ready'){clearTimeout(c.geminiSetupTimer);c.geminiReady=true;status('🟢 Gemini Live: Mikrofon aktiv. Stimme weicht von OpenAI ab.');extendConversation(c);}
+      else if(message.type==='audio')void playGeminiAudio(c,message.data,message.sampleRate);
+      else if(message.type==='user'){c.userSpeaking=false;signal('user',message.text);extendConversation(c);}
+      else if(message.type==='reply'){signal('reply',message.text);extendConversation(c);}
+      else if(message.type==='turn-complete'){c.botSpeaking=false;signal('idle');extendConversation(c);}
+      else if(message.type==='error'){cleanup(String(message.message||'Gemini Live-Fehler.'),false);}
+      else if(message.type==='closed'){const reason=String(message.reason||'').trim();cleanup('Gemini Live beendet (Code '+String(message.code||0)+')'+(reason?': '+reason:'')+'. Mikrofon aus.',false);}
+    });
     native.onAction(({action,value})=>{
       if(action==='realtime-stop')cleanup('Schlafmodus: Sprachverbindung geschlossen.');
       if(action==='realtime-start')start(Boolean(value?.fromWake));
@@ -289,6 +340,7 @@
     });
     native.onState(settings=>{
       activeCharacter=settings?.character||'jeffrey';
+      activeProvider=settings?.aiProvider||'openai';
       broncoVoiceEffect=settings?.broncoVoiceEffect||'hard';
       jeffreyVoiceEffect=settings?.jeffreyVoiceEffect||'tin';
       isSleeping=settings?.mode==='sleep';

@@ -15,3 +15,10 @@ comment-usage.json
 .DS_Store
 Thumbs.db
 *.log
+
+# Isolierte Entwicklungs-Worktrees
+.worktrees/
+
+# Maschinenspezifische lokale Skill-Verknüpfungen
+.claude/
+.ai-devkit.json

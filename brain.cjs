@@ -1,6 +1,7 @@
 'use strict';
 const {memoryContext}=require('./memory.cjs');
 const {characterPrompt,displayName}=require('./characters.cjs');
+const {createLocalProvider}=require('./providers/local-provider.cjs');
 // Tiny local-response engine. No internet or invented computer-monitoring capabilities.
 const systemInstruction = `Du heißt Jeffrey. Du bist ein freundlicher, leicht frecher deutschsprachiger Desktop-Roboter mit schwebenden Händen. Du reagierst auf den Namen Jeffrey; wenn Robin dich begrüßt oder nur beim Namen ruft, antworte kurz und freundlich als Jeffrey. Bei einer Vorstellung nenne dich Jeffrey. Du sprichst klar, hilfreich, gelegentlich witzig. Antworte meist in 1 bis 3 kurzen Sätzen. Behaupte nie, du könntest Bildschirm, Dateien, Kamera, Wetter oder aktuelle Systeme sehen, wenn sie dir nicht übergeben wurden. Du kannst deutsch und englisch sprechen. Gib niemals vor, echte Aktionen am PC durchgeführt zu haben.`;
 function localReply(input,id='jeffrey') {
@@ -33,26 +34,19 @@ async function fetchJSON(url, options) {
     return JSON.parse(raw);
   } finally { clearTimeout(timer); }
 }
-async function remoteReply(input, history, settings, getKey, notes=[]) {
+async function remoteReply(input, history, settings, getKey, notes=[], dependencies={}) {
   const instruction=characterPrompt(settings.character)+(settings.memoryEnabled?memoryContext(notes):'');
   if (settings.aiProvider === 'offline') return localReply(input,settings.character);
   const recent = history.slice(-6).filter(m => ['user','assistant'].includes(m.role)).map(m => ({role:m.role, content:String(m.content).slice(0,800)}));
-  if (settings.aiProvider === 'local') {
-    // Strict localhost-only route: no arbitrary endpoint/host controlled by the UI.
-    try {
-      const models = await fetchJSON('http://127.0.0.1:8080/v1/models', {method:'GET'});
-      const model = models?.data?.[0]?.id || 'local';
-      const json = await fetchJSON('http://127.0.0.1:8080/v1/chat/completions', {
-        method:'POST',headers:{'content-type':'application/json'},
-        body:JSON.stringify({model, messages:[{role:'system',content:instruction},...recent,{role:'user',content:input}],temperature:0.65,max_tokens:220})
-      });
-      const response = json?.choices?.[0]?.message?.content;
-      return typeof response === 'string' && response.trim() ? response.trim() : 'Der lokale Server hat keinen Text zurückgegeben.';
-    } catch (e) {
-      if (String(e.message).includes('fetch failed')) throw new Error('Der lokale KI-Server auf 127.0.0.1:8080 ist nicht erreichbar. Bitte llama-server selbst starten.');
-      throw e;
-    }
+  const onUsage=typeof dependencies.onUsage==='function'?dependencies.onUsage:()=>{};
+  if (settings.aiProvider === 'local' || settings.aiProvider === 'auto') {
+    if(!settings.localModel && settings.aiProvider==='auto') return localReply(input,settings.character);
+    const provider=dependencies.localProvider||createLocalProvider();
+    const result=await provider.reply({baseUrl:settings.localBaseUrl||'http://127.0.0.1:11434/v1',model:settings.localModel,instruction,input,history:recent});
+    onUsage({provider:'local',model:settings.localModel,category:'text',...result.usage});
+    return result.text;
   }
+  if (settings.aiProvider === 'gemini') return 'Gemini Live ist in dieser Version für Sprachgespräche vorgesehen. Für Text wähle bitte Lokal oder OpenAI; es wurde keine zweite Cloudanfrage gestartet.';
   if (settings.aiProvider === 'openai') {
     const key = getKey();
     if (!key) throw new Error('Zuerst den OpenAI-API-Schlüssel speichern. ChatGPT Plus ist kein API-Guthaben.');
@@ -61,6 +55,7 @@ async function remoteReply(input, history, settings, getKey, notes=[]) {
       body:JSON.stringify({model:'gpt-4.1-mini', instructions:instruction,
         input:[...recent,{role:'user',content:input}],max_output_tokens:220,store:false})
     });
+    onUsage({provider:'openai',model:'gpt-4.1-mini',category:'text',source:'reported',units:{inputTextTokens:Number(json?.usage?.input_tokens)||0,outputTextTokens:Number(json?.usage?.output_tokens)||0}});
     return extractOpenAIText(json) || 'Die API hat keinen Antworttext zurückgegeben.';
   }
   throw new Error('Unbekannte KI-Verbindung.');

@@ -4,7 +4,7 @@
 
 Jeffrey & Friends ist ein sprachgesteuerter Windows-11-Desktop-Assistent auf Basis von Electron, HTML, CSS und JavaScript.
 
-Die Anwendung verbindet OpenAI Realtime über WebRTC mit fünf unterschiedlichen Desktop-Charakteren:
+Die Anwendung unterstützt OpenAI Realtime, Gemini Live und lokale OpenAI-kompatible Textmodelle. Die fünf Desktop-Charaktere bleiben davon unabhängig:
 
 - **Jeffrey** – freundlicher futuristischer Roboter
 - **Kelly** – charmante, kompetente virtuelle Assistentin
@@ -17,6 +17,10 @@ Kelly und Krak besitzen ein lokales, audio-synchronisiertes 2D-Viseme-Rig. Die M
 ## Funktionen
 
 - OpenAI-Realtime-Sprachgespräche über WebRTC
+- Gemini-Live-Sprachgespräche mit deutlich gekennzeichneten abweichenden Stimmen
+- lokale Text-KI über Ollama, LM Studio oder llama.cpp
+- Kostenübersicht, konfigurierbare Preise und lokales Monatsbudget
+- Automatikmodus ohne kostenpflichtigen Cloud-Fallback ohne ausdrückliche Freigabe
 - eigene Stimme und Persönlichkeit pro Charakter
 - lokale Weckwörter und Sprachbefehle
 - Aktiv-, Ruhe- und Schlafmodus
@@ -43,7 +47,7 @@ Für die kostenfreie visuelle Simulation kann `VORSCHAU.html` geöffnet werden. 
 npm test
 ```
 
-Der letzte Stand v0.6.5 bestand aus 88 automatischen Tests. Eine echte Realtime-Sprachprüfung muss zusätzlich manuell auf dem Ziel-PC erfolgen und kann API-Kosten verursachen.
+Der Hybrid-KI-Entwicklungsstand besteht aus 139 automatischen Tests. Echte OpenAI-/Gemini-Sprachprüfungen müssen zusätzlich manuell und nur mit ausdrücklicher Kostenfreigabe erfolgen.
 
 ## Technische Hinweise
 
@@ -62,3 +66,13 @@ Bronco bewegt seine Haende nur bei tatsaechlich hoerbarer Realtime-Sprachausgabe
 ## Neue Figur: James (v0.7.2)
 
 James bietet britische Butler-Persönlichkeit und die Stimme Ash. Stimme und Figur wechseln beim Anklicken der fünften Charakterkachel. Optionales Weckwort: „James“/„Hallo James“; Beenden mit „James, verschwinde“. Die vom Nutzer genehmigten übrigen Figuren bleiben erhalten.
+
+## Neu in v0.7.4
+
+Jeffrey & Friends unterstützt jetzt OpenAI als Qualitätsmodus, Gemini Live als Sparmodus, lokale OpenAI-kompatible Textmodelle sowie einen kostenbewussten Automatikmodus. Dazu kommen eine geschützte Schlüsselablage, Kostenschätzungen, Budgetwarnungen und ein optionaler Budgetstopp. Die bestehenden Charaktere, Stimmen, lokalen Audioeffekte, Animationen und Windows-Werkzeuge bleiben erhalten.
+
+Die vollständigen Änderungen und bekannten Grenzen stehen in [AENDERUNGEN-0.7.4.md](AENDERUNGEN-0.7.4.md).
+
+## Hybrid-KI einrichten
+
+Die vier Modi, API-Schlüssel, lokale Server, Preise und Budgetgrenzen sind in [docs/HYBRID-AI-SETUP.md](docs/HYBRID-AI-SETUP.md) beschrieben. OpenAI bleibt der Qualitäts- und Referenzmodus.

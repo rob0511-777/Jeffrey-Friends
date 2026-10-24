@@ -42,6 +42,46 @@
   }
 
 
+  const euro=value=>new Intl.NumberFormat('de-DE',{style:'currency',currency:'EUR',minimumFractionDigits:2,maximumFractionDigits:4}).format(Number(value)||0);
+  function providerDescriptionText(provider,keys={}) {
+    const base=({
+      openai:'OpenAI Qualität: bewährte Realtime-Stimmen und bestehende lokale Audiofilter.',
+      gemini:'Gemini Sparmodus: Live-Audio mit anderen Stimmen; Verfügbarkeit, Datenschutz und Preise hängen von Region und Konto ab.',
+      local:'Lokal: kostenlose Cloud-Inferenz für Text über deinen eigenen Server; kein vollständiges Realtime-Audio.',
+      auto:'Automatisch: lokale Aufgaben zuerst; kein kostenpflichtiger Gemini-/OpenAI-Audioanbieter ohne deine Freigabe.'
+    })[provider]||'';
+    const saved=[];if(keys?.openai)saved.push('OpenAI-Schlüssel gespeichert');if(keys?.gemini)saved.push('Gemini-Schlüssel gespeichert');
+    return base+(saved.length?' '+saved.join(' · ')+'.':'');
+  }
+  function refreshProviderBoxes(provider=document.getElementById('ai-provider')?.value||'openai') {
+    const local=document.getElementById('local-provider-box'),gemini=document.getElementById('gemini-key-box'),openai=document.getElementById('key-box');
+    if(local)local.hidden=provider!=='local'&&provider!=='auto';
+    if(gemini)gemini.hidden=provider!=='gemini'&&provider!=='auto';
+    if(openai)openai.hidden=provider!=='openai'&&provider!=='auto';
+    const description=document.getElementById('provider-description');
+    if(description)description.textContent=providerDescriptionText(provider);
+  }
+  function renderProviderStatus(value) {
+    if(!value||typeof value!=='object')return;
+    const summary=value.summary||{},quality=summary.session?.quality||'none';
+    const labels={openai:'OpenAI',gemini:'Gemini',local:'Lokal',auto:'Automatisch'};
+    document.getElementById('cost-provider').textContent=labels[value.activeProvider]||String(value.activeProvider||'–');
+    document.getElementById('cost-model').textContent=String(value.model||'–');
+    document.getElementById('cost-session').textContent=euro(summary.session?.amountEur);
+    document.getElementById('cost-day').textContent=euro(summary.day?.amountEur);
+    document.getElementById('cost-month').textContent=euro(summary.month?.amountEur);
+    document.getElementById('cost-web').textContent=euro(summary.webSearch?.amountEur);
+    document.getElementById('cost-openai').textContent=euro(summary.byProvider?.openai?.amountEur);
+    document.getElementById('cost-gemini').textContent=euro(summary.byProvider?.gemini?.amountEur);
+    document.getElementById('cost-local').textContent=euro(summary.byProvider?.local?.amountEur);
+    document.getElementById('cost-quality').textContent=quality==='reported'?'Vom Anbieter gemeldete Nutzung; lokale Euro-Berechnung, keine Anbieterrechnung.':quality==='mixed'?'Gemeldete und geschätzte Nutzung gemischt; keine Anbieterrechnung.':quality==='estimated'?'Rechnerisch geschätzte Nutzung; keine Anbieterrechnung.':'Noch keine Nutzungsdaten; keine Anbieterrechnung und kein offizieller Rechnungssaldo.';
+    const budget=summary.budget||{},budgetText=budget.limitEur>0?`Monat ${euro(summary.month?.amountEur)} von ${euro(budget.limitEur)} (${Math.round((budget.ratio||0)*100)} %).`:'Kein lokales Monatsbudget gesetzt.';
+    document.getElementById('budget-status').textContent=(value.warning?value.warning+' ':'')+budgetText;
+    const provider=document.getElementById('ai-provider')?.value||'openai';
+    const description=document.getElementById('provider-description');
+    if(description)description.textContent=providerDescriptionText(provider,value.keys);
+  }
+  function requestProviderStatus(){if(native&&mode==='controls'&&native.getProviderStatus)void native.getProviderStatus().then(renderProviderStatus).catch(()=>{});}
   function refreshControls() {
     document.querySelectorAll('[data-modechoice]').forEach(button =>
       button.setAttribute('aria-pressed', String(button.dataset.modechoice === currentMode)));
@@ -92,6 +132,7 @@
   function localAction(action, value) {
     const now = performance.now();
     if(action==='comment-audio'){playCommentAudio(value);return;}
+    if(action==='provider-status'){renderProviderStatus(value);return;}
     if(action==='character'){showCharacter(value);return;}
     if(action==='comment-audio-stop'){stopCommentAudio();return;}
     if(action==='memory-list'){renderMemories(value);return;}
@@ -172,7 +213,15 @@
     localAction('intensity', settings.intensity);
     localAction('duration', settings.duration);
     document.getElementById('corner').value = settings.corner;
-    document.getElementById('ai-provider').value=settings.aiProvider||'openai';
+    document.getElementById('ai-provider').value=['openai','gemini','local','auto'].includes(settings.aiProvider)?settings.aiProvider:'openai';
+    document.getElementById('local-base-url').value=settings.localBaseUrl||'http://127.0.0.1:11434/v1';
+    document.getElementById('local-model').value=settings.localModel||'';
+    document.getElementById('gemini-model').value=settings.geminiModel||'gemini-3.8-live';
+    document.getElementById('auto-paid-fallback').checked=Boolean(settings.autoPaidFallback);
+    document.getElementById('monthly-budget').value=Number(settings.monthlyBudgetEur)||0;
+    document.getElementById('block-paid-budget').checked=Boolean(settings.blockPaidAtBudget);
+    const prices=settings.pricing||{};for(const [id,p,k] of [['price-openai-text-input','openai','textInput'],['price-openai-text-output','openai','textOutput'],['price-openai-audio-input','openai','audioInput'],['price-openai-audio-output','openai','audioOutput'],['price-gemini-text-input','gemini','textInput'],['price-gemini-text-output','gemini','textOutput'],['price-gemini-audio-input','gemini','audioInput'],['price-gemini-audio-output','gemini','audioOutput'],['price-openai-web','openai','webSearchPer1000']])document.getElementById(id).value=Number(prices?.[p]?.[k])||0;
+    refreshProviderBoxes(document.getElementById('ai-provider').value);
     document.getElementById('speak-replies').checked=Boolean(settings.speakReplies);
     document.getElementById('comment-voice').value=settings.commentVoice||'off';
     document.getElementById('comment-frequency').value=settings.commentFrequency||'normal';
@@ -187,8 +236,8 @@
     document.getElementById('browser-enabled').checked=Boolean(settings.browserEnabled);
     document.getElementById('pc-tools-enabled').checked=Boolean(settings.pcToolsEnabled);
     document.getElementById('pc-alerts-enabled').checked=Boolean(settings.pcAlertsEnabled);
-    document.getElementById('key-box').hidden=false;
     refreshControls();
+    requestProviderStatus();
   }
   function renderMemories(notes) {
     const holder=document.getElementById('memory-list');holder.replaceChildren();
@@ -235,9 +284,22 @@
   });
   document.getElementById('stop-speaking').addEventListener('click',()=>dispatch('stop-speaking'));
   document.getElementById('ai-provider').addEventListener('change',e=>{
-    document.getElementById('key-box').hidden=false;
-    dispatch('ai-provider',e.target.value);
+    refreshProviderBoxes(e.target.value);dispatch('ai-provider',e.target.value);setTimeout(requestProviderStatus,100);
   });
+  document.getElementById('local-base-url').addEventListener('change',e=>dispatch('local-base-url',e.target.value));
+  document.getElementById('local-model').addEventListener('change',e=>dispatch('local-model',e.target.value));
+  document.getElementById('gemini-model').addEventListener('change',e=>dispatch('gemini-model',e.target.value));
+  document.getElementById('auto-paid-fallback').addEventListener('change',e=>dispatch('auto-paid-fallback',e.target.checked));
+  document.getElementById('monthly-budget').addEventListener('change',e=>dispatch('monthly-budget',e.target.value));
+  document.getElementById('block-paid-budget').addEventListener('change',e=>dispatch('block-paid-budget',e.target.checked));
+  document.querySelectorAll('.price-input').forEach(input=>input.addEventListener('change',()=>dispatch('pricing',{openai:{textInput:Number(document.getElementById('price-openai-text-input').value),textOutput:Number(document.getElementById('price-openai-text-output').value),audioInput:Number(document.getElementById('price-openai-audio-input').value),audioOutput:Number(document.getElementById('price-openai-audio-output').value),webSearchPer1000:Number(document.getElementById('price-openai-web').value)},gemini:{textInput:Number(document.getElementById('price-gemini-text-input').value),textOutput:Number(document.getElementById('price-gemini-text-output').value),audioInput:Number(document.getElementById('price-gemini-audio-input').value),audioOutput:Number(document.getElementById('price-gemini-audio-output').value),webSearchPer1000:14},local:{textInput:0,textOutput:0,audioInput:0,audioOutput:0,webSearchPer1000:0}})));
+  document.getElementById('load-local-models').addEventListener('click',async()=>{
+    const box=document.getElementById('local-model-status');box.textContent='Lokaler Server wird geprüft …';
+    try{const models=await native.listLocalModels(document.getElementById('local-base-url').value);box.textContent=models.length?'Gefunden: '+models.join(', '):'Keine Modelle gemeldet.';if(models.length&&!document.getElementById('local-model').value){document.getElementById('local-model').value=models[0];dispatch('local-model',models[0]);}}
+    catch(error){box.textContent=String(error?.message||error).slice(0,240);}
+  });
+  document.getElementById('save-gemini-key').addEventListener('click',()=>{dispatch('save-provider-key',{provider:'gemini',value:document.getElementById('gemini-api-key').value});document.getElementById('gemini-api-key').value='';setTimeout(requestProviderStatus,150);});
+  document.getElementById('clear-gemini-key').addEventListener('click',()=>{document.getElementById('gemini-api-key').value='';dispatch('clear-provider-key','gemini');setTimeout(requestProviderStatus,150);});
   document.getElementById('speak-replies').addEventListener('change',e=>dispatch('speak-replies',e.target.checked));
   document.getElementById('comment-voice').addEventListener('change',e=>dispatch('comment-voice',e.target.value));
   document.getElementById('comment-frequency').addEventListener('change',e=>dispatch('comment-frequency',e.target.value));
