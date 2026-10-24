@@ -103,7 +103,7 @@ body[data-mode=overlay] #robot .speech, body[data-mode=overlay] #robot .transmis
 #robot .portrait-shell{filter:drop-shadow(0 6px 12px #11171dcc)}
 #robot .portrait-avatar{position:absolute;inset:0;display:none;width:100%;height:100%;transform-origin:50% 45%;animation:avatar-float 4.5s ease-in-out infinite}
 #robot .portrait-avatar img{display:block;position:absolute;inset:0;width:100%;height:100%;object-fit:contain;max-width:none;max-height:none;animation:none;transform-origin:center;pointer-events:none}
-#robot[data-character=kelly] .portrait-kelly,#robot[data-character=krak] .portrait-krak{display:block}
+#robot[data-character=kelly] .portrait-kelly,#robot[data-character=krak] .portrait-krak,#robot[data-character=bronco] .portrait-bronco,#robot[data-character=james] .portrait-james{display:block}
 #robot .portrait-avatar .portrait-hand{transform-origin:center;filter:drop-shadow(0 3px 6px #1116)}
 #robot .portrait-avatar .portrait-left{animation:avatar-left-wave 3.0s ease-in-out infinite}
 #robot .portrait-avatar .portrait-right{animation:avatar-right-wave 3.6s ease-in-out infinite}
@@ -122,11 +122,11 @@ body[data-mode=overlay] #robot .speech, body[data-mode=overlay] #robot .transmis
 @media(prefers-reduced-motion:reduce){#robot .portrait-avatar,#robot .portrait-avatar .portrait-hand,#robot .portrait-avatar .portrait-lips{animation:none!important}}
 
 
-#robot[data-character=kelly] .character,#robot[data-character=krak] .character{display:none}
-#robot[data-character=kelly] .portrait-shell,#robot[data-character=krak] .portrait-shell{display:flex}
+#robot[data-character=kelly] .character,#robot[data-character=krak] .character,#robot[data-character=bronco] .character,#robot[data-character=james] .character{display:none}
+#robot[data-character=kelly] .portrait-shell,#robot[data-character=krak] .portrait-shell,#robot[data-character=bronco] .portrait-shell,#robot[data-character=james] .portrait-shell{display:flex}
 
 /* Stufe 4.2: kompakte Charakterauswahl ohne übergroße Bilder. */
-.character-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin:9px 0}
+.character-cards{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:5px;margin:9px 0}
 .character-pick{display:flex;align-items:center;justify-content:center;flex-direction:column;gap:4px;min-width:0;min-height:82px;padding:8px 4px;border-radius:10px;border:1px solid var(--line);background:#0c1c24;color:#d4e6e7;font-weight:600;font-size:11px}
 .character-pick[aria-pressed=true]{background:#a9efdb14;border-color:#98e9d9;box-shadow:inset 0 0 0 1px #98e9d922}
 .character-pick img{display:block;width:46px!important;height:46px!important;max-width:46px!important;max-height:46px!important;object-fit:cover;object-position:center 31%;border-radius:50%;border:1px solid #8be9e64a;box-shadow:0 2px 9px #0007}
@@ -135,3 +135,42 @@ body[data-mode=overlay] #robot .speech, body[data-mode=overlay] #robot .transmis
 #robot .portrait-avatar .portrait-lips{opacity:0;animation:none!important;filter:none;transition:opacity .07s ease-in-out}
 #robot.is-speaking .portrait-avatar .portrait-lips{opacity:1}
 #robot[data-phase=hidden] .portrait-avatar .portrait-lips{opacity:0}
+
+/* Stufe 4.4: Broncos einfache Kieferbewegung in Jeffreys Stil.
+   Keine Viseme-Sprites oder Balken: nur der getrennte Original-Unterkiefer,
+   im Takt der bereits vorhandenen Audioerkennung, max. 4px Verschiebung. */
+#robot .portrait-bronco .portrait-jaw {
+  z-index:2; transform:translateY(calc(var(--bronco-jaw,0) * 4px));
+  transition:transform 85ms ease-out; will-change:transform;
+}
+#robot[data-phase=hidden] .portrait-bronco .portrait-jaw {transform:translateY(0)}
+@media (prefers-reduced-motion:reduce) {
+  #robot .portrait-bronco .portrait-jaw {transform:none!important;transition:none!important}
+}
+
+/* v0.7.1: Bronco gestikuliert NUR waehrend seiner tatsaechlichen Sprachausgabe.
+   Das Audio-Signal stammt vom vorhandenen OpenAI-Ausgabe-Analyser, nicht vom Mikrofon.
+   Alle anderen Charaktere und Broncos Stimme bleiben unveraendert. */
+#robot[data-character="bronco"] .portrait-bronco .portrait-hand {
+  animation: none;
+  transform: none;
+}
+#robot[data-character="bronco"][data-bronco-talking="true"] .portrait-bronco .portrait-left {
+  animation: avatar-left-talk .85s ease-in-out infinite alternate;
+}
+#robot[data-character="bronco"][data-bronco-talking="true"] .portrait-bronco .portrait-right {
+  animation: avatar-right-talk 1s ease-in-out infinite alternate;
+}
+
+/* v0.7.2: James' Floating-Butler, ohne Eingriff in Broncos Stimm-/Gestenfilter. */
+#robot .portrait-james .portrait-jaw {
+  z-index: 2; transform: translateY(calc(var(--james-jaw,0) * 3px));
+  transition: transform 90ms ease-out; will-change:transform;
+}
+#robot[data-character="james"] .portrait-james .portrait-hand {animation:none;transform:none;}
+#robot[data-character="james"][data-james-talking="true"] .portrait-james .portrait-left {animation:avatar-left-talk 1.15s ease-in-out infinite alternate;}
+#robot[data-character="james"][data-james-talking="true"] .portrait-james .portrait-right {animation:avatar-right-talk 1.28s ease-in-out infinite alternate;}
+#robot[data-phase=hidden] .portrait-james .portrait-jaw {transform:translateY(0);}
+@media(prefers-reduced-motion:reduce) {
+  #robot .portrait-james .portrait-jaw {transform:none!important;transition:none!important;}
+}

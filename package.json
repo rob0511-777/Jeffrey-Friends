@@ -1,8 +1,8 @@
 {
   "name": "desktop-roboter",
-  "version": "0.6.4",
+  "version": "0.7.2",
   "private": true,
-  "description": "Stufe 4.3 – Jeffrey, Kelly und Krak mit lokaler Audio-/Transkript-Viseme-Animation",
+  "description": "Version 0.7.2 – James, kultivierter britischer Butler als fuenfter Buddy",
   "main": "main.cjs",
   "scripts": {
     "start": "electron .",

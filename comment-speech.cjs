@@ -12,8 +12,8 @@ async function synthesizeComment(text,apiKey,preferences={},fetcher=fetch) {
   try {
     const result=await fetcher('https://api.openai.com/v1/audio/speech',{
       method:'POST',signal:abort.signal,headers:{authorization:`Bearer ${apiKey}`,'content-type':'application/json'},
-      body:JSON.stringify({model:'gpt-4o-mini-tts',voice:s.liveVoice,input:text,response_format:'mp3',speed:1.08,
-        instructions:(s.character==='kelly'?'Sprich warm, charmant und feminin, melodisch und freundlich. Nur den Satz sprechen.':s.character==='krak'?'Sprich frech, kratzig und schelmisch wie ein Kobold. Nur den Satz sprechen.':'Sprich auf Deutsch mit heller, leicht frecher, warmer, verspielter Roboter-Comic-Stimme. Fröhlich, natürlich, charmant. Nur den Satz sprechen.')})
+      body:JSON.stringify({model:'gpt-4o-mini-tts',voice:s.liveVoice,input:text,response_format:'mp3',speed:s.character==='bronco'?0.96:s.character==='james'?0.94:1.08,
+        instructions:(s.character==='kelly'?'Sprich warm, charmant und feminin, melodisch und freundlich. Nur den Satz sprechen.':s.character==='krak'?'Sprich frech, kratzig und schelmisch wie ein Kobold. Nur den Satz sprechen.':s.character==='james'?'Sprich wie ein englischer Butler, gelassen, gepflegt und freundlich, bei englischen Woertern mit feiner britischer Standardaussprache. Der Text wird wortgetreu vorgelesen.':s.character==='bronco'?'Sprich auf Deutsch mit ausgeprägt rauem, tiefem, angerissenem Klang. Ein grantiger Metallschrott-Roboter: heiser, knarzend, sandig und stellenweise knurrend, nie warm oder weich. Klare Verständlichkeit trotz rauer Stimme. Nur den Satz sprechen.':'Sprich auf Deutsch kurz, klar, selbstbewusst und trocken-humorvoll wie ein intelligenter Computer-Roboter; nicht süßlich, nicht kichern. Nur den Satz sprechen.')})
     });
     if(!result.ok)throw new Error('Spontane Sprachausgabe: HTTP '+result.status);
     const data=Buffer.from(await result.arrayBuffer());

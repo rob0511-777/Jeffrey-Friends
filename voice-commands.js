@@ -13,12 +13,15 @@
     const aliases={
       jeffrey:/\b(?:jeffrey|jeffry|jeffri|jeffray|jeffrei|dscheffri|dscheffrey|roboter|robot)\b/,
       kelly:/\b(?:kelly|kelli|kelley|keli|kellie)\b/,
-      krak:/\b(?:krak|krack|krakk|krag|crack|crag|kraak|krakks|krark)\b/
+      krak:/\b(?:krak|krack|krakk|krag|crack|crag|kraak|krakks|krark)\b/,
+      bronco:/\b(?:bronco|bronko|broncho|branko|broncko)\b/,
+      james:/\b(?:james|jaymes|dscheims|dschemes|dschejms)\b/
     };
     const hasName=(aliases[active]||aliases.jeffrey).test(text);
     const dismiss=/\b(?:verschwinde|verschwind|geh weg|geh schlafen|blende dich aus|schalte dich aus|mach dich unsichtbar|verzieh dich|geh in den hintergrund)\b/.test(text);
     const farewell=/\bbis spater\b/.test(text);
-    if(hasName&&(dismiss||farewell))return true;
+    const englishDismiss=active==='james' && /\b(?:you are dismissed|you may go|that will be all|goodbye james)\b/.test(text);
+    if(hasName&&(dismiss||farewell||englishDismiss))return true;
     // Kurzer direkter Befehl an die bereits aktive Figur darf auch ohne Namen sein.
     // Keine Sätze über das Verschwinden anderer Dinge oder Konjunktive.
     return /^(?:verschwinde|geh weg|geh schlafen|blende dich aus|verzieh dich)$/.test(text);

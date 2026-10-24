@@ -15,14 +15,14 @@ const {readNotes,addNote,removeNote,clearNotes} = require('./memory.cjs');
 const {synthesizeComment,canUseOpenAICommentVoice} = require('./comment-speech.cjs');
 const {extractMemoryCommand,isExplicitMemoryRequest}=require('./memory-commands.cjs');
 const {displayName,character,CHARACTERS,switchCharacter}=require('./characters.cjs');
-const {MODES, CORNERS, GESTURES, AI_PROVIDERS, LIVE_VOICES, VOICE_STYLES, COMMENT_VOICES, COMMENT_FREQUENCIES, WAKE_SENSITIVITIES, normalizeSettings, migrateStartupSettings, canSpontaneouslyComment, pickPhrase, nextCommentDelay} = require('./settings.cjs');
+const {MODES, CORNERS, GESTURES, AI_PROVIDERS, LIVE_VOICES, VOICE_STYLES, COMMENT_VOICES, COMMENT_FREQUENCIES, WAKE_SENSITIVITIES, BRONCO_VOICE_EFFECTS, JEFFREY_VOICE_EFFECTS, normalizeSettings, migrateStartupSettings, canSpontaneouslyComment, pickPhrase, nextCommentDelay} = require('./settings.cjs');
 
 let controls, overlay, tray, settings, file;
 let isQuitting = false, robotVisible = false, autoShowing = false;
 let commentTimer = null, hideTimer = null, saveTimer = null;
 let hitCheckTimer = null, acceptsPointer = false, manuallyMoved = false;
 const ALLOWED = new Set(['show','hide','toggle','gesture','intensity','duration','corner','size','mode','comments','test-comment','open-controls',
-  'chat','listen','stop-speaking','ai-provider','speak-replies','read-comments','save-api-key','clear-api-key','realtime-activity','wake-enabled','wake-test','wake-sensitivity','live-voice','voice-style','web-enabled','browser-enabled',
+  'chat','listen','stop-speaking','ai-provider','speak-replies','read-comments','save-api-key','clear-api-key','realtime-activity','wake-enabled','wake-test','wake-sensitivity','live-voice','voice-style','bronco-voice-effect','jeffrey-voice-effect','web-enabled','browser-enabled',
   'character','memory-enabled','memory-add','memory-remove','memory-clear','pc-tools-enabled','pc-alerts-enabled','pc-status-test','comment-voice','comment-frequency','comment-audio-ended']);
 let talking = null, listening = null, chatBusy = false, voiceBusy = false, talkSerial = 0;
 let sessionKey = '';
@@ -362,7 +362,7 @@ function onWakeDetected() {
   // Wait for System.Speech to release the microphone before calling getUserMedia.
   setTimeout(()=>{
     if(settings.mode==='sleep'||!liveActive)return;
-    sendAction('realtime-start');
+    sendAction('realtime-start',{fromWake:true});
   },550);
 }
 function setMode(mode) {
@@ -531,6 +531,10 @@ function handleAction(event, payload) {
     settings.aiProvider=value;messages=[];storeSoon();syncState();status(`KI-Modus: ${value}`);
   } else if (action === 'live-voice' && LIVE_VOICES.includes(value)) {
     settings.liveVoice=value;settings.characterProfiles[settings.character].voice=value;storeSoon();syncState();status('Neue Live-Stimme gilt ab dem nächsten Gespräch.');
+  } else if (action === 'bronco-voice-effect' && BRONCO_VOICE_EFFECTS.includes(value)) {
+    settings.broncoVoiceEffect=value;storeSoon();syncState();status('Bronco-Stimme ab nächstem Gespräch: '+value);
+  } else if (action === 'jeffrey-voice-effect' && JEFFREY_VOICE_EFFECTS.includes(value)) {
+    settings.jeffreyVoiceEffect=value;storeSoon();syncState();status('Jeffrey-Computerstimme ab nächstem Gespräch: '+value);
   } else if (action === 'voice-style' && VOICE_STYLES.includes(value)) {
     settings.voiceStyle=value;settings.characterProfiles[settings.character].style=value;storeSoon();syncState();status('Neuer Sprechstil gilt ab dem nächsten Gespräch.');
   } else if (action === 'browser-enabled' && typeof value === 'boolean') {

@@ -15,7 +15,7 @@
   let currentMode = 'active', commentsAllowed = true, chatBusy = false, voiceBusy = false;
   let activeCharacter='jeffrey';
   // Stufe 4.3: Das Audio-Viseme-Rig wird von lip-sync-runtime.js gesteuert.
-  const activeName=()=>({jeffrey:'Jeffrey',kelly:'Kelly',krak:'Krak'})[activeCharacter]||'Jeffrey';
+  const activeName=()=>({jeffrey:'Jeffrey',kelly:'Kelly',krak:'Krak',bronco:'Bronco',james:'James'})[activeCharacter]||'Jeffrey';
   const phrases = {
     wave: 'Hallo Robin. Schön, dass du da bist.',
     point: 'Schau mal dort – ich zeige es dir.',
@@ -63,8 +63,12 @@
     });
   }
   function showCharacter(id){
-    activeCharacter=['jeffrey','kelly','krak'].includes(id)?id:'jeffrey';
+    activeCharacter=['jeffrey','kelly','krak','bronco','james'].includes(id)?id:'jeffrey';
     robot.dataset.character=activeCharacter;
+    const jeffreyVoiceRow=document.getElementById('jeffrey-voice-row');
+    if(jeffreyVoiceRow)jeffreyVoiceRow.hidden=activeCharacter!=='jeffrey';
+    const broncoVoiceRow=document.getElementById('bronco-voice-row');
+    if(broncoVoiceRow)broncoVoiceRow.hidden=activeCharacter!=='bronco';
     document.querySelectorAll('[data-character-choice]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.characterChoice===activeCharacter)));
     const name=activeName();
     document.title=name+' – Desktop-Assistent';
@@ -76,7 +80,7 @@
     const test=document.getElementById('wake-test');if(test)test.textContent='🔎 Codewort „'+name+'“ kostenlos testen';
     document.getElementById('appear').firstChild.textContent=name+' rufen ';
     const intro=document.getElementById('character-intro');
-    if(intro)intro.textContent=({jeffrey:'Jeffrey: ein Roboterkopf, zwei Hände. Und ein freundliches Hallo aus dem Rauschen.',kelly:'Kelly: Deine charmante virtuelle Assistentin. Freundlich, elegant und immer auf Abruf.',krak:'Krak: Ein schrulliger grüner Kobold. Ziemlich frech – und trotzdem hilfreich.'})[activeCharacter];
+    if(intro)intro.textContent=({jeffrey:'Jeffrey: ein Roboterkopf, zwei Hände. Und ein freundliches Hallo aus dem Rauschen.',kelly:'Kelly: Deine charmante virtuelle Assistentin. Freundlich, elegant und immer auf Abruf.',krak:'Krak: Ein schrulliger grüner Kobold. Ziemlich frech – und trotzdem hilfreich.',bronco:'Bronco: Ein rostiger Mecker-Roboter mit Zigarre. Schlecht gelaunt, aber nützlich.',james:'James: Ein kultivierter englischer Butler-Roboter. Diskret, charmant und stets zu Diensten.'})[activeCharacter];
     document.getElementById('chat-log')?.querySelectorAll('strong').forEach(node=>{if(node.textContent!=='Du: ')node.textContent=name+': ';});
   }
   function setGesture(value) {
@@ -177,6 +181,8 @@
     document.getElementById('wake-sensitivity').value=settings.wakeSensitivity||'sensitive';
     document.getElementById('live-voice').value=settings.liveVoice||'shimmer';
     document.getElementById('voice-style').value=settings.voiceStyle||'comic';
+    document.getElementById('bronco-voice-effect').value=settings.broncoVoiceEffect||'hard';
+    document.getElementById('jeffrey-voice-effect').value=settings.jeffreyVoiceEffect||'tin';
     document.getElementById('web-enabled').checked=Boolean(settings.webEnabled);
     document.getElementById('browser-enabled').checked=Boolean(settings.browserEnabled);
     document.getElementById('pc-tools-enabled').checked=Boolean(settings.pcToolsEnabled);
@@ -245,6 +251,8 @@
   document.querySelectorAll('[data-character-choice]').forEach(button=>button.addEventListener('click',()=>dispatch('character',button.dataset.characterChoice)));
   document.getElementById('live-voice').addEventListener('change',e=>dispatch('live-voice',e.target.value));
   document.getElementById('voice-style').addEventListener('change',e=>dispatch('voice-style',e.target.value));
+  document.getElementById('bronco-voice-effect').addEventListener('change',e=>dispatch('bronco-voice-effect',e.target.value));
+  document.getElementById('jeffrey-voice-effect').addEventListener('change',e=>dispatch('jeffrey-voice-effect',e.target.value));
   document.getElementById('web-enabled').addEventListener('change',e=>dispatch('web-enabled',e.target.checked));
   document.getElementById('browser-enabled').addEventListener('change',e=>dispatch('browser-enabled',e.target.checked));
   document.getElementById('pc-tools-enabled').addEventListener('change',e=>dispatch('pc-tools-enabled',e.target.checked));

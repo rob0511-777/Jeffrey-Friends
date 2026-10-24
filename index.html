@@ -11,6 +11,8 @@
   <script src="lip-sync.js" defer></script>
   <script src="renderer.js" defer></script>
   <script src="voice-commands.js" defer></script>
+  <script src="bronco-voice.js" defer></script>
+  <script src="jeffrey-voice.js" defer></script>
   <script src="realtime.js" defer></script>
   <script src="lip-sync-runtime.js" defer></script>
   <script src="visual-preview.js" defer></script>
@@ -22,11 +24,13 @@
       <h1>Ein kleiner<br>Moment Magie<span>.</span></h1>
       <p class="intro" id="character-intro">Jeffrey: ein Roboterkopf, zwei Hände. Und ein freundliches Hallo aus dem Rauschen.</p>
       <div class="divider"></div>
-      <div class="section-title">STUFE 4.3 · CHARAKTER AUSWÄHLEN</div>
+      <div class="section-title">STUFE 5.0 · CHARAKTER AUSWÄHLEN</div>
       <div class="character-cards" role="group" aria-label="Desktop-Charakter">
         <button type="button" class="character-pick" data-character-choice="jeffrey" aria-pressed="true"><span class="mini-icon">🤖</span><span>Jeffrey</span></button>
         <button type="button" class="character-pick" data-character-choice="kelly" aria-pressed="false"><img src="assets/kelly.png" alt=""><span>Kelly</span></button>
         <button type="button" class="character-pick" data-character-choice="krak" aria-pressed="false"><img src="assets/krak.png" alt=""><span>Krak</span></button>
+        <button type="button" class="character-pick" data-character-choice="bronco" aria-pressed="false"><img src="assets/bronco.png" alt=""><span>Bronco</span></button>
+        <button type="button" class="character-pick" data-character-choice="james" aria-pressed="false"><img src="assets/james.png" alt=""><span>James</span></button>
       </div>
       <p class="hint">Immer nur eine Figur ist aktiv. Ihr Name, ihre Stimme und die Persönlichkeit wechseln mit. Eine laufende Live-Unterhaltung wird beim Wechsel beendet (Kostenschutz).</p>
       <div class="section-title">HOLOGRAMM AUSPROBIEREN</div>
@@ -85,6 +89,7 @@
           <option value="coral">Coral · frisch und freundlich</option>
           <option value="marin">Marin · bisherige Stimme</option>
           <option value="verse">Verse · ausdrucksvoll</option>
+          <option value="ash">Ash · alternative männliche Stimme</option>
           <option value="sage">Sage · ruhig</option>
           <option value="cedar">Cedar · warm</option>
         </select>
@@ -95,6 +100,26 @@
           <option value="energetic">Lebhaft · voller Energie</option>
         </select>
         <p class="voice-hint">Jede Figur hat ihr eigenes gespeichertes Stimmenprofil. Bei Charakterwechsel gilt dessen Stimme für das nächste Gespräch. Krak klingt durch Sprechregeln koboldhaft; echte Stimmverzerrung ist nicht garantiert.</p>
+        <div id="jeffrey-voice-row" class="bronco-voice-controls">
+          <label class="voice-label" for="jeffrey-voice-effect">🤖 Jeffreys Computerstimme (nur Jeffrey)</label>
+          <select id="jeffrey-voice-effect" class="voice-select">
+            <option value="off">Original · ohne lokalen Filter</option>
+            <option value="light">Leicht · etwas heller, dezent technisch</option>
+            <option value="tin" selected>Blechern · höher und metallisch (Empfehlung)</option>
+            <option value="robot">Robotisch · deutlich höher und künstlicher</option>
+          </select>
+          <p class="voice-hint">Nur Jeffreys Live-Stimme. Lokal verarbeitet und ohne zusätzliche API-Kosten. Nach dem Wechsel ein neues Gespräch starten. Andere Charaktere bleiben unverändert.</p>
+        </div>
+        <div id="bronco-voice-row" class="bronco-voice-controls" hidden>
+          <label class="voice-label" for="bronco-voice-effect">🔧 Broncos Schrottplatz-Stimme (nur Bronco)</label>
+          <select id="bronco-voice-effect" class="voice-select">
+            <option value="off">Originalstimme · ohne Effekt</option>
+            <option value="rough">Rau · etwas tiefer</option>
+            <option value="hard" selected>Hart · tief, kratzig und metallisch</option>
+            <option value="extreme">Extrem · sehr tief und schrottig</option>
+          </select>
+          <p class="voice-hint">Wirkt lokal auf Broncos Live-Stimme; keine Extra-API-Kosten. Nach dem Umschalten ein neues Live-Gespräch starten. Falls der Pitch-Effekt unter Windows nicht verfügbar ist, bleibt der raue Klangfilter aktiv.</p>
+        </div>
         <label class="toggle"><input id="web-enabled" type="checkbox"><span>🌐 Websuche für aktuelle Fragen aktivieren (zusätzliche API-Kosten)</span></label>
         <p class="voice-hint">Der Roboter sucht nur bei aktuellen Fragen wie Wetter, Nachrichten oder Öffnungszeiten. Maximal 2 Websuchen pro Live-Gespräch. Bei aktivierter Suche laufen Suchanfragen über OpenAI; jede Suche kostet zusätzlich Guthaben.</p>
         <label class="toggle"><input id="browser-enabled" type="checkbox" checked><span>🌐 Webseiten öffnen und Produkte bei Idealo suchen</span></label>
@@ -156,7 +181,7 @@
           <p class="voice-hint">API-Aufrufe können Kosten verursachen. Der Schlüssel wird mit Windows-Datenschutz verschlüsselt, wenn verfügbar.</p>
         </div>
       </div>
-      <div class="footnote"><span class="tiny-dot"></span> Stufe 4.3 · v0.6.4 · Jeffrey, Kelly & Krak</div>
+      <div class="footnote"><span class="tiny-dot"></span> v0.7.2 · Jeffrey, Kelly, Krak, Bronco & James</div>
       <p class="shortcut">Leertaste: rufen / ausblenden · Esc: ausblenden</p>
       <p class="native-shortcut">Überall: Strg + Alt + Leertaste<br>Fenster schließen = weiter im Infobereich.<br>Dort per Rechtsklick: Modi und Beenden.</p>
     </aside>
@@ -178,6 +203,18 @@
               <img class="portrait-hand portrait-left" src="assets/krak-hand-left.png" alt="">
               <img class="portrait-hand portrait-right" src="assets/krak-hand-right.png" alt="">
               <img class="portrait-lips" src="assets/krak-lip-3.png" alt="">
+            </div>
+            <div class="portrait-avatar portrait-bronco">
+              <img class="portrait-head" src="assets/bronco-head.png" alt="">
+              <img class="portrait-jaw" src="assets/bronco-jaw.png" alt="">
+              <img class="portrait-hand portrait-left" src="assets/bronco-hand-left.png" alt="">
+              <img class="portrait-hand portrait-right" src="assets/bronco-hand-right.png" alt="">
+            </div>
+            <div class="portrait-avatar portrait-james">
+              <img class="portrait-head" src="assets/james-head.png" alt="">
+              <img class="portrait-jaw" src="assets/james-jaw.png" alt="">
+              <img class="portrait-hand portrait-left" src="assets/james-hand-left.png" alt="">
+              <img class="portrait-hand portrait-right" src="assets/james-hand-right.png" alt="">
             </div>
           </div>
           <svg class="character" viewBox="0 0 460 390" aria-label="Freundlicher Roboterkopf mit schwebenden Händen" role="img">
