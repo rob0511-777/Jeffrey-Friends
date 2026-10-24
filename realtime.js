@@ -13,7 +13,9 @@
   let current = null;
   let isSleeping = false;
   let activeCharacter='jeffrey';
-  const characterName=()=>({jeffrey:'Jeffrey',kelly:'Kelly',krak:'Krak'})[activeCharacter]||'Jeffrey';
+  let broncoVoiceEffect='hard';
+  let jeffreyVoiceEffect='tin';
+  const characterName=()=>({jeffrey:'Jeffrey',kelly:'Kelly',krak:'Krak',bronco:'Bronco',james:'James'})[activeCharacter]||'Jeffrey';
   const IDLE_MS = 45000; // 45 Sekunden nach dem letzten Rede-Beitrag beenden.
   const MAX_SESSION_MS = 15*60*1000; // Zusätzlicher Schutz gegen endlose gebührenpflichtige Sitzungen
 
@@ -32,9 +34,11 @@
     if (!c) return;
     current = null;
     c.stopped = true;
-    clearTimeout(c.timer);clearTimeout(c.idleTimer);
+    clearTimeout(c.timer);clearTimeout(c.idleTimer);clearInterval(c.broncoHealthTimer);clearInterval(c.jeffreyHealthTimer);
     try {c.stream?.getTracks().forEach(track=>track.stop());}catch{}
     try {c.dc?.close();}catch{}
+    try {c.broncoEffect?.stop();}catch{}
+    try {c.jeffreyEffect?.stop();}catch{}
     try {c.pc?.close();}catch{}
     try {if (c.audio) {c.audio.pause();c.audio.srcObject=null;c.audio.remove();}}catch{}
     window.JeffreyLipSyncRuntime?.stop();
@@ -134,10 +138,10 @@
       cleanup('Sitzung von OpenAI beendet. Mikrofon aus.');
     }
   }
-  async function start() {
+  async function start(fromWake=false) {
     if (!native || mode!=='controls' || current || isSleeping) return;
     errorBox.hidden=true;
-    const c={pc:null,stream:null,dc:null,audio:null,timer:null,idleTimer:null,stopped:false,userSpeaking:false,botSpeaking:false,toolsInFlight:0,seenCalls:new Set(),rememberTranscriptSeen:false,appTranscriptSeen:false};
+    const c={pc:null,stream:null,dc:null,audio:null,broncoEffect:null,broncoHealthTimer:null,jeffreyEffect:null,jeffreyHealthTimer:null,fromWake:Boolean(fromWake),timer:null,idleTimer:null,stopped:false,userSpeaking:false,botSpeaking:false,toolsInFlight:0,seenCalls:new Set(),rememberTranscriptSeen:false,appTranscriptSeen:false};
     current=c;setButtons();signal('opened');extendConversation(c);
     c.timer=setTimeout(()=>cleanup('15-Minuten-Sicherheitslimit erreicht. Mikrofon aus.'),MAX_SESSION_MS);
     status('Mikrofonberechtigung wird angefragt …');
@@ -158,13 +162,102 @@
       c.pc.addEventListener('track',e=>{
         if(current!==c) return;
         const outputStream=e.streams[0] || new MediaStream([e.track]);
+        // Nie waehrend der Wiedergabe das srcObject austauschen!
+        // Sonst wird ein noch offenes audio.play()-Promise mit AbortError
+        // abgebrochen und faelschlich als "Audiowiedergabe blockiert" gemeldet.
         c.audio.srcObject=outputStream;
+        const useBroncoFilter=activeCharacter==='bronco' && broncoVoiceEffect!=='off' && Boolean(window.BroncoVoiceEffect?.create);
+        const useJeffreyFilter=activeCharacter==='jeffrey' && jeffreyVoiceEffect!=='off' && Boolean(window.JeffreyVoiceEffect?.create);
+        // Broncos Filter spielt direkt ueber WebAudio zu den Lautsprechern.
+        // Das originale <audio> bleibt als sofort nutzbarer, stummer Fallback aktiv.
+        c.audio.muted=useBroncoFilter||useJeffreyFilter;
         void window.JeffreyLipSyncRuntime?.attachStream(outputStream);
-        c.audio.play().catch(()=>fail('Audiowiedergabe blockiert. Prüfe deine Windows-Soundausgabe.'));
+        const playOriginal=()=>{
+          if(current!==c || c.stopped)return;
+          c.audio.muted=false;
+          void c.audio.play().catch(err=>{
+            if(current!==c || c.stopped || err?.name==='AbortError')return;
+            fail('Originalton konnte nicht gestartet werden: '+String(err?.message||err||'Unbekannter Fehler').slice(0,180));
+          });
+        };
+        void c.audio.play().catch(err=>{
+          if(current!==c || c.stopped || err?.name==='AbortError')return;
+          // Beim direkten WebAudio-Ausgang waere eine gescheiterte, stummgeschaltete
+          // HTML-Wiedergabe keine gesperrte Windows-Soundkarte.
+          if(!useBroncoFilter && !useJeffreyFilter)fail('Audio konnte nicht gestartet werden: '+String(err?.message||err||'Unbekannter Fehler').slice(0,180));
+        });
+        if(useJeffreyFilter){
+          void window.JeffreyVoiceEffect.create(outputStream,undefined,jeffreyVoiceEffect).then(effect=>{
+            if(current!==c || c.stopped){effect?.stop();return;}
+            if(!effect || !effect.directOutput){effect?.stop();playOriginal();return;}
+            c.jeffreyEffect=effect;
+            let restored=false;
+            const restoreOriginal=()=>{
+              if(restored)return;restored=true;
+              clearInterval(c.jeffreyHealthTimer);c.jeffreyHealthTimer=null;
+              if(c.jeffreyEffect===effect)c.jeffreyEffect=null;
+              effect.stop();
+              if(current!==c || c.stopped)return;
+              playOriginal();
+              status('Jeffrey: Computerfilter pausiert – Originalstimme aktiv.');
+            };
+            if(effect.isHealthy && !effect.isHealthy()){restoreOriginal();return;}
+            status(effect.pitchShifted?'Jeffrey: hellere, metallische Computerstimme aktiv.':'Jeffrey: blecherner Klangfilter aktiv.');
+            c.jeffreyHealthTimer=setInterval(()=>{
+              if(current!==c || c.stopped){clearInterval(c.jeffreyHealthTimer);return;}
+              if(effect.isHealthy && !effect.isHealthy())restoreOriginal();
+            },800);
+          }).catch(err=>{
+            console.warn('Jeffrey-Audioeffekt konnte nicht eingerichtet werden:',err);
+            playOriginal();
+          });
+        }
+        if(useBroncoFilter){
+          void window.BroncoVoiceEffect.create(outputStream,undefined,broncoVoiceEffect).then(effect=>{
+            if(current!==c || c.stopped){effect?.stop();return;}
+            if(!effect || !effect.directOutput){effect?.stop();playOriginal();return;}
+            c.broncoEffect=effect;
+            let restored=false;
+            const restoreOriginal=()=>{
+              if(restored)return;restored=true;
+              clearInterval(c.broncoHealthTimer);c.broncoHealthTimer=null;
+              if(c.broncoEffect===effect)c.broncoEffect=null;
+              effect.stop();
+              if(current!==c || c.stopped)return;
+              playOriginal();
+              status('Bronco: Filter pausiert – Originalstimme aktiv.');
+            };
+            if(effect.isHealthy && !effect.isHealthy()){restoreOriginal();return;}
+            status(effect.pitchShifted?'Bronco: tiefe, raue Schrottplatz-Stimme aktiv.':'Bronco: rauer Filter aktiv.');
+            c.broncoHealthTimer=setInterval(()=>{
+              if(current!==c || c.stopped){clearInterval(c.broncoHealthTimer);return;}
+              if(effect.isHealthy && !effect.isHealthy())restoreOriginal();
+            },800);
+          }).catch(err=>{
+            console.warn('Bronco-Audioeffekt konnte nicht eingerichtet werden:',err);
+            playOriginal();
+          });
+        }
       });
       for (const track of c.stream.getAudioTracks()) c.pc.addTrack(track,c.stream);
       c.dc=c.pc.createDataChannel('oai-events');
-      c.dc.addEventListener('open',()=>{if(current===c)status('🟢 Live: Sprich mit mir! Nach 45 Sekunden Gesprächspause schalte ich ab.');});
+      c.dc.addEventListener('open',()=>{
+        if(current!==c)return;
+        status('🟢 Live: Sprich mit mir! Nach 45 Sekunden Gesprächspause schalte ich ab.');
+        if(c.fromWake && activeCharacter==='james'){
+          // Eine elegante, kurze Begruessung nur nach lokal erkanntem Weckwort.
+          try{c.dc.send(JSON.stringify({type:'response.create',response:{instructions:
+            'Du bist James, ein feiner britischer Butler. Dein Name wurde gerufen. Begruesse jetzt mit EINEM sehr kurzen, gepflegten Satz in elegantem britischen Englisch: zum Beispiel „Good day, sir. How may I assist?“ oder „At your service, sir.“ Anschliessend hoere zu. Verwende eine kultivierte britische Aussprache.'}}));}catch{}
+        }
+        if(c.fromWake && activeCharacter==='bronco'){
+          // Der reine Weckruf wird von Windows erkannt und erreicht nicht die Realtime-KI.
+          // Daher Bronco nach dem Aufwecken gezielt EINEN kurzen Gruß sprechen lassen.
+          // Erst bei offener Verbindung senden, damit keine unsichtbare Warteschlange entsteht.
+          try{c.dc.send(JSON.stringify({type:'response.create',response:{instructions:
+            'Du bist Bronco und wurdest soeben beim Namen gerufen. Antworte JETZT in einem einzigen sehr kurzen deutschen Satz besonders genervt, schnodderig und rau, zum Beispiel „Was denn jetzt schon wieder?!“ oder „Ja ja. Ich bin doch da. Leider.“ Variiere die Formulierung. Stell eine kurze Frage, was du tun sollst. Keine langen Ausführungen.'}}));}
+          catch{}
+        }
+      });
       c.dc.addEventListener('message',e=>{try{const message=JSON.parse(e.data);window.JeffreyLipSyncRuntime?.handleRealtimeEvent(message);handleEvent(message,c);}catch{}});
       c.dc.addEventListener('close',()=>{if(current===c)cleanup('Live-Gespräch beendet. Mikrofon aus.');});
       const offer=await c.pc.createOffer();
@@ -186,21 +279,23 @@
       if(current===c)cleanup(String(error?.message || error || 'Live-Verbindung fehlgeschlagen.'),false);
     }
   }
-  startButton.addEventListener('click',start);
+  startButton.addEventListener('click',()=>start(false));
   stopButton.addEventListener('click',()=>cleanup());
   if(native){
     native.onAction(({action,value})=>{
       if(action==='realtime-stop')cleanup('Schlafmodus: Sprachverbindung geschlossen.');
-      if(action==='realtime-start')start();
+      if(action==='realtime-start')start(Boolean(value?.fromWake));
       if(action==='mode') {isSleeping=value==='sleep';if(isSleeping)cleanup('Schlafmodus. Mikrofon aus.');setButtons();}
     });
     native.onState(settings=>{
       activeCharacter=settings?.character||'jeffrey';
+      broncoVoiceEffect=settings?.broncoVoiceEffect||'hard';
+      jeffreyVoiceEffect=settings?.jeffreyVoiceEffect||'tin';
       isSleeping=settings?.mode==='sleep';
       if(isSleeping)cleanup('Schlafmodus. Mikrofon aus.');
       setButtons();
     });
   }
-  window.addEventListener('beforeunload',()=>cleanup());
+  window.addEventListener('beforeunload',()=>{cleanup();void window.BroncoVoiceEffect?.dispose?.();void window.JeffreyVoiceEffect?.dispose?.();});
   setButtons();
 })();

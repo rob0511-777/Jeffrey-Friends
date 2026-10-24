@@ -1,7 +1,7 @@
 param(
     [ValidateRange(0.30,0.90)]
     [double]$MinConfidence = 0.42,
-    [ValidateSet('Jeffrey','Kelly','Krak')]
+    [ValidateSet('Jeffrey','Kelly','Krak','Bronco','James')]
     [string]$WakeName = 'Jeffrey'
 )
 $ErrorActionPreference = 'Stop'
@@ -21,6 +21,10 @@ try {
         # Das Erkennungsvokabular bleibt absichtlich klein (weniger Fehlaktivierungen).
         if ($WakeName -eq 'Kelly') {
             $words = @('Kelly','Kelli','Kelley','Hallo Kelly','Hey Kelly','Hallo Kelli')
+        } elseif ($WakeName -eq 'James') {
+            $words = @('James','Jaymes','Dscheims','Dschejms','Dschemes','Hey James','Hallo James','James bitte','Hey Dscheims','Hallo Dscheims')
+        } elseif ($WakeName -eq 'Bronco') {
+            $words = @('Bronco','Bronko','Broncho','Branko','Hallo Bronco','Hey Bronco','Hallo Bronko','Hey Bronko')
         } elseif ($WakeName -eq 'Krak') {
             $words = @('Krak','Krack','Krakk','Krag','Kraak','Crack','Hallo Krak','Hey Krak','Hallo Krack','Hallo Krag')
         } else {

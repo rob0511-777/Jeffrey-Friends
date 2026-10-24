@@ -13,7 +13,7 @@ test('modi und Defaults funktionieren', () => {
 test('Ungültige oder manipulierte Einstellungen werden begrenzt', () => {
   const s = normalizeSettings({mode:'admin', corner:'top-of-screen', intensity:999,
     duration:20,comments:'yes'});
-  assert.deepEqual(s, {character:'jeffrey',characterProfiles:{jeffrey:{voice:'shimmer',style:'comic'},kelly:{voice:'coral',style:'normal'},krak:{voice:'cedar',style:'comic'}},mode:'active',corner:'bottom-right',position:null,size:100,intensity:100,duration:600,comments:true,aiProvider:'openai',aiProviderDefaultMigrated:true,speakReplies:true,readComments:false,wakeEnabled:false,wakeSensitivity:'sensitive',liveVoice:'shimmer',voiceStyle:'comic',webEnabled:false,browserEnabled:true,memoryEnabled:false,pcToolsEnabled:true,pcAlertsEnabled:false,commentVoice:'off',commentFrequency:'normal'});
+  assert.deepEqual(s, {character:'jeffrey',characterProfiles:{jeffrey:{voice:'shimmer',style:'comic'},kelly:{voice:'coral',style:'normal'},krak:{voice:'cedar',style:'comic'},bronco:{voice:'verse',style:'normal'},james:{voice:'ash',style:'normal'}},mode:'active',corner:'bottom-right',position:null,size:100,intensity:100,duration:600,comments:true,aiProvider:'openai',aiProviderDefaultMigrated:true,speakReplies:true,readComments:false,wakeEnabled:false,wakeSensitivity:'sensitive',liveVoice:'shimmer',voiceStyle:'comic',webEnabled:false,browserEnabled:true,memoryEnabled:false,pcToolsEnabled:true,pcAlertsEnabled:false,commentVoice:'off',commentFrequency:'normal',broncoVoiceEffect:'hard',jeffreyVoiceEffect:'tin'});
 });
 test('Spontane Kommentare nur im Aktivmodus und bei Freigabe', () => {
   assert.equal(canSpontaneouslyComment({mode:'active',comments:true}), true);

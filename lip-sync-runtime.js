@@ -13,6 +13,8 @@
     krak:{mm:3,ee:4,aa:0,oh:1,fv:2}
   };
   let analysis=null,latestPose={viseme:'sil',openness:0,jaw:0,source:'silence'},latestAt=performance.now();
+  let lastBroncoVoiceAt=-Infinity;
+  let lastJamesVoiceAt=-Infinity; // Kurze Sprechpausen nicht als neue Handanimation zaehlen.
   let renderId=0,simulationId=0,simulationStatus=null;
 
   function installRig(character){
@@ -44,9 +46,21 @@
     const pose=now-latestAt>240?{viseme:'sil',openness:0,jaw:0,source:'timeout'}:latestPose;
     const audible=pose.viseme!=='sil'&&pose.openness>.015;
     if(robot){
+      // Haende nur bei Bronco an die hoerbare KI-Ausgabe koppeln.
+      // 420 ms Nachlauf verhindern nervoes An/Aus zwischen Silben.
+      const isBronco=robot.dataset.character==='bronco';
+      if(isBronco && audible)lastBroncoVoiceAt=now;
+      robot.dataset.broncoTalking=String(isBronco && now-lastBroncoVoiceAt<420);
+      const isJames=robot.dataset.character==='james';
+      if(isJames && audible)lastJamesVoiceAt=now;
+      robot.dataset.jamesTalking=String(isJames && now-lastJamesVoiceAt<380);
+      const jamesJaw=robot.querySelector('.portrait-james');
+      if(jamesJaw)jamesJaw.style.setProperty('--james-jaw',isJames&&audible?Math.min(1,Math.max(0,pose.jaw)).toFixed(3):'0');
       robot.dataset.audioSpeaking=String(audible);
       robot.dataset.speaking=String(audible);
       robot.classList.toggle('is-speaking',audible);
+      const broncoJaw=robot.querySelector('.portrait-bronco');
+      if(broncoJaw)broncoJaw.style.setProperty('--bronco-jaw',robot.dataset.character==='bronco'&&audible?Math.min(1,Math.max(0,pose.jaw)).toFixed(3):'0');
       for(const character of ['kelly','krak']){
         const rig=robot.querySelector(`.portrait-${character} .portrait-mouth-rig`);
         if(!rig)continue;
@@ -84,7 +98,10 @@
       try{active.analyser.disconnect();}catch{}
       if(active.context.state!=='closed')void active.context.close();
     }
+    lastBroncoVoiceAt=-Infinity;
+    lastJamesVoiceAt=-Infinity;
     engine.reset();publish({viseme:'sil',openness:0,jaw:0,source:'stopped'});
+    if(robot){robot.dataset.broncoTalking='false';robot.dataset.jamesTalking='false';}
     channel?.postMessage({type:'reset'});
   }
 
@@ -149,7 +166,7 @@
     const note=document.createElement('span');note.textContent='SIMULATION – kein echtes Audio';
     const row=document.createElement('div');row.className='lip-sync-lab-row';
     const makeButton=(label,action)=>{const button=document.createElement('button');button.type='button';button.textContent=label;button.addEventListener('click',action);return button;};
-    row.append(makeButton('Kelly',()=>{document.querySelector('[data-character-choice="kelly"]')?.click();document.getElementById('appear')?.click();}),makeButton('Krak',()=>{document.querySelector('[data-character-choice="krak"]')?.click();document.getElementById('appear')?.click();}),makeButton('▶ Sequenz',playSimulation),makeButton('■ Stopp',stopSimulation));
+    row.append(makeButton('Bronco',()=>{document.querySelector('[data-character-choice="bronco"]')?.click();document.getElementById('appear')?.click();}),makeButton('Kelly',()=>{document.querySelector('[data-character-choice="kelly"]')?.click();document.getElementById('appear')?.click();}),makeButton('Krak',()=>{document.querySelector('[data-character-choice="krak"]')?.click();document.getElementById('appear')?.click();}),makeButton('▶ Sequenz',playSimulation),makeButton('■ Stopp',stopSimulation));
     const poses=document.createElement('div');poses.className='lip-sync-lab-row';
     for(const viseme of visemes)poses.appendChild(makeButton(viseme.toUpperCase(),()=>setPose({viseme,openness:.72,jaw:viseme==='aa'?.72:viseme==='oh'?.58:viseme==='ee'?.4:.18,source:'simulation'})));
     simulationStatus=document.createElement('output');simulationStatus.className='lip-sync-lab-status';simulationStatus.textContent='Viseme: SIL · Kiefer 0 % · Quelle: Simulation';

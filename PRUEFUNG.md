@@ -1,4 +1,4 @@
-# Jeffrey v0.6.4 – Prüfprotokoll
+# Jeffrey v0.6.6 – Prüfprotokoll
 
 ## Automatisch bestätigt
 
@@ -26,3 +26,30 @@
 - Mikrofon, Weckwort und Audioausgabe unter den lokalen Windows-Datenschutzeinstellungen.
 
 Keine kostenpflichtige OpenAI-Sprachsitzung wurde während der automatischen Prüfung gestartet.
+
+
+## Stufe 4.4: Bronco
+
+- 88/88 Node.js-Tests erfolgreich.
+- 4. Charakter inklusive eigenem gespeicherten Stimmenprofil und Windows-Weckwort im Code geprüft.
+- Getrennte Kopf-, Hand- und Kieferbilder als Vorschau zusammengesetzt.
+- Kein echter Windows-Audio-/Mikrofontest und kein vollständiger Browser-/Electron-Lauf möglich.
+
+## Stufe 4.5 – rauerer und grantigerer Bronco
+
+- 93/93 Node-Tests erfolgreich (`node --test tests/*.test.cjs`).
+- Neue Tests für Bronco-Stimmanweisungen, genervtes Begrüßungsverhalten, Web-Audio-Sättigung und unveränderte Stimmen der anderen Figuren.
+- Stimmfilter und gesprochene Begrüßung sind nur für Bronco aktiv.
+- Manueller Klangtest unter Windows mit API-Schlüssel ist noch erforderlich; durch einen echten Live-Test können geringe API-Kosten anfallen.
+
+
+## Stufe 4.6 – tiefere, härtere Bronco-Stimme (v0.6.7)
+
+- 97 automatisierte Tests erfolgreich, inklusive Grenzprüfung der Filtereinstellung und Simulation einer gesenkten Sinus-Tonhöhe.
+- Neue lokale AudioWorklet-Verarbeitung und ScriptProcessor-Fallback syntaxgeprüft.
+- **Kein echter Windows-Klangtest durchgeführt**: Die subjektive Härte, Tonqualität und der AudioWorklet-Zugriff müssen auf dem Zielrechner geprüft werden.
+- Kein API-Schlüssel und keine kostenpflichtige Realtime-Sitzung bei der Paketprüfung verwendet.
+
+
+## Version 0.6.9
+Gezielter Test: `node --test tests/stage48.test.cjs`. Komplette Testsuite: `npm test`. Weiterhin echten Wechsel Bronco → Schlafmodus → Bronco sowie Bronco → Kelly → Bronco am Windows-PC prüfen.

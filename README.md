@@ -1,12 +1,16 @@
 # Jeffrey & Friends
 
+![Jeffrey & Friends - das Team](assets/jeffrey-and-friends-v072.png)
+
 Jeffrey & Friends ist ein sprachgesteuerter Windows-11-Desktop-Assistent auf Basis von Electron, HTML, CSS und JavaScript.
 
-Die Anwendung verbindet OpenAI Realtime über WebRTC mit drei unterschiedlichen Desktop-Charakteren:
+Die Anwendung verbindet OpenAI Realtime über WebRTC mit fünf unterschiedlichen Desktop-Charakteren:
 
 - **Jeffrey** – freundlicher futuristischer Roboter
 - **Kelly** – charmante, kompetente virtuelle Assistentin
 - **Krak** – schelmischer grüner Fantasy-Kobold
+- **Bronco** – mürrischer rostiger Schrottplatz-Roboter
+- **James** – höflicher englischer Butler-Roboter (eigene Stimme, lokales Weckwort)
 
 Kelly und Krak besitzen ein lokales, audio-synchronisiertes 2D-Viseme-Rig. Die Mundbewegung wird am tatsächlich abgespielten WebRTC-Audio analysiert und mit deutschen Transkript-Visemen kombiniert. Die bisherige feste Mundbildfolge wurde entfernt. In Version 0.6.4 wurden zusätzlich künstliche Augen-Overlays entfernt, die gelegentlich als schwarze Balken sichtbar wurden.
 
@@ -39,10 +43,22 @@ Für die kostenfreie visuelle Simulation kann `VORSCHAU.html` geöffnet werden. 
 npm test
 ```
 
-Der aktuelle Stand v0.6.4 besteht aus 86 automatischen Tests. Eine echte Realtime-Sprachprüfung muss zusätzlich manuell auf dem Ziel-PC erfolgen und kann API-Kosten verursachen.
+Der letzte Stand v0.6.5 bestand aus 88 automatischen Tests. Eine echte Realtime-Sprachprüfung muss zusätzlich manuell auf dem Ziel-PC erfolgen und kann API-Kosten verursachen.
 
 ## Technische Hinweise
 
 Die aktuelle Lippen-Synchronisation ist eine audio-synchronisierte, transkriptgestützte Viseme-Schätzung und kein Studio-Forced-Alignment. Echte Augenanimation ist deaktiviert, bis getrennte Augen- und Lid-Assets verfügbar sind. Weitere Details stehen in [LIESMICH.md](LIESMICH.md) und [ANIMATION-ARCHITEKTUR.md](ANIMATION-ARCHITEKTUR.md).
 
 API-Schlüssel, Benutzerprofile und lokale Gedächtnisdaten werden nicht im Repository gespeichert.
+
+## Bronco (v0.6.6)
+
+Vierter Charakter mit eigener Stimme (`verse`), trockenem Humor, lokalem Weckwort und direkt bedienbarem mechanischem Unterkiefer. Das bestehende Kelly/Krak-Viseme-Rig wird nicht geändert. Details in `AENDERUNGEN-0.6.5.md` und `AENDERUNGEN-0.6.6.md`.
+
+## Neu in v0.7.1
+Bronco bewegt seine Haende nur bei tatsaechlich hoerbarer Realtime-Sprachausgabe; sonst bleiben sie ruhig. Details in `AENDERUNGEN-0.7.1.md`.
+
+
+## Neue Figur: James (v0.7.2)
+
+James bietet britische Butler-Persönlichkeit und die Stimme Ash. Stimme und Figur wechseln beim Anklicken der fünften Charakterkachel. Optionales Weckwort: „James“/„Hallo James“; Beenden mit „James, verschwinde“. Die vom Nutzer genehmigten übrigen Figuren bleiben erhalten.

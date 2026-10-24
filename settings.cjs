@@ -5,12 +5,14 @@ const MODES = Object.freeze(['active', 'quiet', 'sleep']);
 const CORNERS = Object.freeze(['bottom-right', 'bottom-left', 'top-right', 'top-left', 'free']);
 const GESTURES = Object.freeze(['wave', 'point', 'think', 'talk']);
 const AI_PROVIDERS = Object.freeze(['offline','local','openai']);
-const LIVE_VOICES = Object.freeze(['shimmer','coral','marin','verse','sage','cedar']);
+const LIVE_VOICES = Object.freeze(['shimmer','coral','marin','verse','sage','cedar','ash']);
 const VOICE_STYLES = Object.freeze(['comic','normal','energetic']);
 const COMMENT_VOICES = Object.freeze(['off','windows','openai']);
 const COMMENT_FREQUENCIES = Object.freeze(['rare','normal','often']);
 const WAKE_SENSITIVITIES = Object.freeze(['sensitive','normal','strict']);
-const DEFAULTS = Object.freeze({character:'jeffrey',mode:'active', comments:true, corner:'bottom-right', position:null, size:100, intensity:35, duration:1500, aiProvider:'openai', speakReplies:true, readComments:false, wakeEnabled:false, wakeSensitivity:'sensitive', liveVoice:'shimmer', voiceStyle:'comic', webEnabled:false, browserEnabled:true, memoryEnabled:false, pcToolsEnabled:true, pcAlertsEnabled:false, commentVoice:'off', commentFrequency:'normal'});
+const BRONCO_VOICE_EFFECTS=Object.freeze(['off','rough','hard','extreme']);
+const JEFFREY_VOICE_EFFECTS=Object.freeze(['off','light','tin','robot']);
+const DEFAULTS = Object.freeze({character:'jeffrey',mode:'active', comments:true, corner:'bottom-right', position:null, size:100, intensity:35, duration:1500, aiProvider:'openai', speakReplies:true, readComments:false, wakeEnabled:false, wakeSensitivity:'sensitive', liveVoice:'shimmer', voiceStyle:'comic', webEnabled:false, browserEnabled:true, memoryEnabled:false, pcToolsEnabled:true, pcAlertsEnabled:false, commentVoice:'off', commentFrequency:'normal', broncoVoiceEffect:'hard', jeffreyVoiceEffect:'tin'});
 
 function normalizeSettings(input = {}) {
   const v = input && typeof input === 'object' ? input : {};
@@ -50,6 +52,8 @@ function normalizeSettings(input = {}) {
     pcAlertsEnabled: typeof v.pcAlertsEnabled === 'boolean' ? v.pcAlertsEnabled : DEFAULTS.pcAlertsEnabled,
     commentVoice: COMMENT_VOICES.includes(v.commentVoice) ? v.commentVoice : (v.readComments === true ? 'windows' : DEFAULTS.commentVoice),
     commentFrequency: COMMENT_FREQUENCIES.includes(v.commentFrequency) ? v.commentFrequency : DEFAULTS.commentFrequency,
+    broncoVoiceEffect:BRONCO_VOICE_EFFECTS.includes(v.broncoVoiceEffect)?v.broncoVoiceEffect:DEFAULTS.broncoVoiceEffect,
+    jeffreyVoiceEffect:JEFFREY_VOICE_EFFECTS.includes(v.jeffreyVoiceEffect)?v.jeffreyVoiceEffect:DEFAULTS.jeffreyVoiceEffect,
     corner,
     position,
     size: asNumber(v.size, DEFAULTS.size, 50, 150),
@@ -103,4 +107,4 @@ function nextCommentDelay(random = Math.random, frequency='normal') {
   const [min,max]=ranges[frequency]||ranges.normal;
   return (min + Math.floor(random() * (max-min))) * 60 * 1000;
 }
-module.exports = {MODES, CORNERS, GESTURES, AI_PROVIDERS, LIVE_VOICES, VOICE_STYLES, COMMENT_VOICES, COMMENT_FREQUENCIES, WAKE_SENSITIVITIES, DEFAULTS, normalizeSettings, migrateStartupSettings, canSpontaneouslyComment, pickPhrase, nextCommentDelay};
+module.exports = {MODES, CORNERS, GESTURES, AI_PROVIDERS, LIVE_VOICES, VOICE_STYLES, COMMENT_VOICES, COMMENT_FREQUENCIES, WAKE_SENSITIVITIES, BRONCO_VOICE_EFFECTS, JEFFREY_VOICE_EFFECTS, DEFAULTS, normalizeSettings, migrateStartupSettings, canSpontaneouslyComment, pickPhrase, nextCommentDelay};

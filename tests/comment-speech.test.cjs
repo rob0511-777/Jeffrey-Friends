@@ -27,7 +27,7 @@ test('TTS benutzt den geschützten OpenAI-Endpunkt mit kurzer Comic-Anweisung',a
    assert.equal(body.model,'gpt-4o-mini-tts');
    assert.equal(body.voice,'coral');
    assert.equal(body.response_format,'mp3');
-   assert.match(body.instructions,/Comic/);
+   assert.match(body.instructions,/Computer-Roboter/);
    return {ok:true,arrayBuffer:async()=>audio};
  });
  assert.equal(base64,audio.toString('base64'));
