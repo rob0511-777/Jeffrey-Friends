@@ -48,7 +48,7 @@ let lastPhraseText='';
 let lastAppRequest=null, lastSpokenAt=0, lastUserTranscript="", appLaunches=0, pcStatusCalls=0, pcMonitor=null, pcBusy=false, pcHighCount=0;
 const lastPcAlert={cpu:0,memory:0};
 let lastChatAt = 0;
-let desktopVision=null,selectedText=null,windowsDesktop=null,lastDesktopRequest=null,desktopEpoch=0,desktopContext={};
+let desktopVision=null,selectedText=null,windowsDesktop=null,lastDesktopRequest=null,activeDesktopRequest=null,desktopEpoch=0,desktopContext={};
 let selectionPlayback=null,selectionAudioId=0;
 function desktopProvider(){return settings.aiProvider==='auto'?providerManager.activeProvider(liveSessionId)?.id||'auto':settings.aiProvider;}
 async function handleDesktopRequest(question,{isCurrent=()=>true}={}){
@@ -95,7 +95,7 @@ async function readSelectedAloud(text,{provider,isCurrent}){
   }finally{sendAction('speaking',false);}
 }
 function requireNonDesktopAction(){
-  if(lastDesktopRequest)throw new Error('Bildschirmfragen erlauben nur Lesen und Erklären.');
+  if(activeDesktopRequest||lastDesktopRequest)throw new Error('Bildschirmfragen erlauben nur Lesen und Erklären.');
 }
 async function analyzeLiveDesktop(event,question){
   const request=lastDesktopRequest,session=liveSessionId;
@@ -103,8 +103,21 @@ async function analyzeLiveDesktop(event,question){
      !request||request.used||request.question!==question||Date.now()-request.at>30000||!isDesktopRequest(question))
     throw new Error('Kein aktueller ausdrücklicher Bildschirmbefehl freigegeben.');
   request.used=true;
+  if(activeDesktopRequest)throw new Error('Eine Desktop-Anfrage wird bereits verarbeitet.');
+  activeDesktopRequest=request;
   const epoch=desktopEpoch;
-  return handleDesktopRequest(question,{isCurrent:()=>epoch===desktopEpoch&&liveActive&&liveSessionId===session&&lastDesktopRequest===request&&!controls.isDestroyed()});
+  // A final transcript grants a request once. Subsequent VAD/transcription events
+  // are not revocation: only explicit cancellation or a session change is.
+  const isCurrent=()=>epoch===desktopEpoch&&liveActive&&settings.mode!=='sleep'&&liveSessionId===session&&activeDesktopRequest===request&&!controls.isDestroyed();
+  try{
+    const result=await handleDesktopRequest(question,{isCurrent});
+    return isCurrent()?result:{cancelled:true};
+  }catch(error){
+    // Intentional cancellation is normal control flow, not an Electron IPC
+    // handler failure (which Electron would log even if the renderer catches it).
+    if(!isCurrent())return {cancelled:true};
+    throw error;
+  }finally{if(activeDesktopRequest===request)activeDesktopRequest=null;}
 }
 function readAPIKey() {return keyStore?.read('openai')||'';}
 function saveAPIKey(value) {if(!keyStore)throw new Error('Schlüsselablage noch nicht bereit.');return keyStore.save('openai',value);}
@@ -154,7 +167,7 @@ function commentUsage() {let r={day:'',count:0,lastAt:0};try {r=JSON.parse(fs.re
 function countPaidComment(usage) {fs.writeFileSync(usageFile(),JSON.stringify({...usage,count:usage.count+1,lastAt:Date.now()}));}
 function errorNotice(message) {sendAction('voice-error', String(message).slice(0,320));}
 function stopTalking(cancelDesktop=true,clearContext=true) {
-  if(cancelDesktop){desktopEpoch++;if(clearContext)desktopContext={};}
+  if(cancelDesktop){desktopEpoch++;lastDesktopRequest=null;if(clearContext)desktopContext={};sendAction('desktop-cancel');}
   selectionPlayback?.finish(false);sendAction('selection-audio-stop');
   talkSerial++;
   if (talking) { talking.stop(); talking = null; }
@@ -186,7 +199,10 @@ async function doChat(text) {
     if(isDesktopRequest(prompt)){
       let reply;
       const epoch=desktopEpoch;
-      try{reply=await handleDesktopRequest(prompt,{isCurrent:()=>epoch===desktopEpoch&&settings.mode!=='sleep'});}catch(error){reply=String(error.message||'Bildanalyse nicht verfügbar.').slice(0,320);errorNotice(reply);}
+      try{reply=await handleDesktopRequest(prompt,{isCurrent:()=>epoch===desktopEpoch&&settings.mode!=='sleep'});}catch(error){
+        if(settings.mode==='sleep'||epoch!==desktopEpoch)return;
+        reply=String(error.message||'Bildanalyse nicht verfügbar.').slice(0,320);errorNotice(reply);
+      }
       if(settings.mode==='sleep'||epoch!==desktopEpoch)return;
       const spoken=reply?.spoken,privateReply=reply?.private;
       reply=privateReply?reply.message:reply;
@@ -575,6 +591,8 @@ function handleAction(event, payload) {
         const phrase = typeof value.text === 'string' ? value.text.trim().slice(0,1000) : '';
         if (!phrase) return;
         if(kind==='user'){
+          if(isStopCommand(phrase))stopTalking();
+          else if(activeDesktopRequest)return;
           if(!isDesktopRequest(phrase))desktopContext={};
           if(phrase!==lastUserTranscript)lastDesktopRequest=isDesktopRequest(phrase)?{question:phrase,at:Date.now(),used:false}:null;
           lastUserTranscript=phrase;const wanted=parseAppCommand(phrase);lastAppRequest=wanted?{id:wanted,at:Date.now(),used:false}:null;
@@ -593,7 +611,8 @@ function handleAction(event, payload) {
         robotVisible=true;autoShowing=true;clearHideTimer();
         sendAction('show');sendAction('speaking',true);updateMousePassThrough();
       } else if (kind === 'user-speaking') {
-        stopTalking(true,false);lastSpokenAt=Date.now();lastAppRequest=null;lastUserTranscript='';lastDesktopRequest=null;
+        if(activeDesktopRequest)return;
+        stopTalking(false,false);lastSpokenAt=Date.now();lastAppRequest=null;lastUserTranscript='';lastDesktopRequest=null;
         robotVisible=true;autoShowing=true;clearHideTimer();
         sendAction('show');sendAction('speaking',false);updateMousePassThrough();
       } else if (kind === 'idle') {
@@ -743,7 +762,7 @@ else {
           buttons:['Abbrechen','Zustimmen'],defaultId:0,cancelId:0,noLink:true});
         return choice.response===1;
       },
-      onStatus:message=>{status(message);sendAction('comment',{gesture:'think',text:message});},
+      onStatus:message=>{status(message);sendAction('desktop-status',message);sendAction('comment',{gesture:'think',text:message});},
       onUsage:usage=>{costTracker.record({sessionId:liveSessionId||'desktop-'+Date.now(),...usage});sendProviderStatus();}
     });
     selectedText=createSelectedText({

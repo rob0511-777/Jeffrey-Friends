@@ -28,3 +28,30 @@ werden wiederverwendet. Auswahltexte werden nicht in Gedächtnis oder Logs gesch
 Bekannte Grenzen: native Windows- und Audiofunktion ungeprüft; GDI-Nummerierung
 kann von Windows-Einstellungen abweichen; UIA nicht in jeder Anwendung verfügbar;
 Gemini hat keinen passenden Auswahlpfad; Lokal/Offline benutzt Windows-Stimme.
+
+
+## Windows-Bugfix: Anfrage-Lebensdauer
+
+Nachweis am bisherigen Commit `2b3227d`: `user-speaking` erhöhte über
+`stopTalking(true,false)` die `desktopEpoch` und löschte `lastDesktopRequest`.
+`analyzeLiveDesktop.isCurrent` hing am zurückgesetzten Transkriptmarker. Im Renderer
+wurden gleichzeitig Generation und Werkzeugblockade zurückgesetzt. Die originale
+Fehlermeldung entstand an allen vier nachgestellten asynchronen Grenzen:
+Monitor-Metadaten, Datenschutzdialog, Aufnahme und HTTP-Antwort.
+
+- Hauptprozess: `activeDesktopRequest` hält die eigene Identität bis `finally`.
+  Zwischenereignisse dürfen sie nicht widerrufen. Echte Abbruchwege erhöhen weiter
+  die Generation und senden die gezielte Renderer-Abbruchnachricht. Absichtliche
+  IPC-Abbrüche werden als `{cancelled:true}` bestätigt, ohne Handlerfehler.
+- Renderer: Verarbeitung, ausstehende Vorleseanfrage und aktive Desktop-Antwort
+  bleiben bei VAD/Zwischentranskripten geschützt. Expliziter Stopp verwirft Ergebnisse;
+  verspätete `response.created` werden abgebrochen. `response.done` und Fehler lösen
+  den Vorlesezustand auch bei fehlendem `response.created`. Abbruch pro Antwort nur
+  einmal; Timerbereitschaft wird im Analyse-`finally` wiederhergestellt.
+- Analysedienst: tatsächliche Verarbeitungsschritte als Status, requestgebundenes
+  HTTP-AbortSignal bei echtem Abbruch. Keine zusätzlichen Aufnahmen oder Diagnoseinhalte.
+- Zustimmung blieb bereits korrekt im Dienst des App-Prozesses gespeichert und
+  wird nicht an Sprachsitzungen gekoppelt. Tests schützen Sitzungswechsel/Neustart.
+
+`IDLE_MS=45000`, das 15-Minuten-Limit, Charaktere, Stimmen, Filter sowie die
+Providerimplementierungen bleiben unverändert. Keine neuen Funktionen oder APIs.

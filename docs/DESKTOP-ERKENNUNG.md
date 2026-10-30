@@ -75,7 +75,8 @@ wird nicht als Aufnahmebefehl interpretiert.
 
 „Was steht da?“ wird nur direkt nach einer erfolgreichen passenden Bildschirm-
 oder Auswahlaktion und innerhalb von 30 Sekunden entsprechend zugeordnet. Eine
-andere Nutzeräußerung, Stopp oder ein Sitzungswechsel löscht den Kontext. Sonst
+andere bestätigte Nutzeräußerung außerhalb einer laufenden Desktop-Verarbeitung,
+Stopp oder ein Sitzungswechsel löscht den Kontext. Sonst
 fragt die App lokal nach. Ganze Äußerungen werden deterministisch erkannt;
 Großschreibung, gebräuchliche Namensvarianten und Höflichkeit sind berücksichtigt.
 Zitate, Verneinungen, hypothetische Sätze und angehängte Aktionen sind keine
@@ -131,6 +132,57 @@ zurückholen; spätere Abschnitte und veraltete Ausgaben werden unterdrückt.
 `store:false` wird für Responses verwendet. Das garantiert keine vollständige
 Löschung beim Anbieter. Für Cloudverarbeitung und Aufbewahrung gelten die
 OpenAI-Regeln. Vor der Zustimmung sensible Inhalte schließen bzw. abwählen.
+
+## Windows-Bugfix: unerwartete Abbrüche
+
+Die Fehlermeldung „Bildschirmaufnahme nicht freigegeben oder Anfrage nicht mehr
+aktiv“ ließ sich ohne Windows mit dem echten Analyse-Dienst reproduzieren: Ein
+zusätzliches `speech_started`-Ereignis erhöhte im Hauptprozess die Abbruchgeneration
+und löschte `lastDesktopRequest`. Die Gültigkeitsprüfung der noch laufenden Anfrage
+hing an genau diesem letzten Transkript. Zugleich änderte der Renderer
+`desktopGeneration` und setzte `desktopBlocked` zurück. Selbst harmloses Rauschen
+konnte daher nach Monitorermittlung, Zustimmung, Aufnahme oder HTTP-Antwort die
+Freigabe entziehen oder die fertige Antwort verwerfen.
+
+Jetzt besitzt die laufende Anfrage eine eigene, einmalig freigegebene Identität,
+unabhängig von späteren Transkripten. VAD- und Zwischenereignisse, fehlgeschlagene
+Transkriptionen sowie weitere nicht abbrechende Transkripte während Verarbeitung
+oder Desktop-Sprachantwort starten weder eine weitere Aufnahme noch Werkzeuge
+und widerrufen die Anfrage nicht. Bitte für einen absichtlichen Abbruch ausdrücklich
+„Stopp“ sagen oder eine der genannten Abbruchmöglichkeiten verwenden.
+
+Stopp-Schaltfläche, gesprochener Stopp, Schlafmodus, Ausblenden, Sitzungsende und
+Charakterwechsel verwerfen laufende Ergebnisse weiterhin. Während einer laufenden
+HTTP-Anfrage wird ein echter Abbruch zusätzlich über deren AbortSignal umgesetzt.
+Eine bereits erfolgte Übertragung wird dadurch nicht zurückgeholt. Absichtliche
+Abbrüche werden über IPC als Abbruch bestätigt und nicht als Fehler-Sprachantwort
+oder Electron-Handlerfehler weitergereicht. Verspätete Sprachantworten nach Stopp
+werden verworfen; derselbe Antwort-Abbruch wird nicht mehrfach gesendet.
+
+Die bestehende Bild-Zustimmung bleibt im einmal pro App-Prozess angelegten
+Analyse-Dienst erhalten. Drei wiederholte Sitzungsenden über den tatsächlichen
+45.000-ms-Idle-Callback mit anschließend derselben Bildschirmfrage benötigen im
+Test nur einen Dialog. Ein neu angelegter App-/Dienstzustand benötigt wieder
+Zustimmung. Es wurde keine Zustimmung auf Datenträger gespeichert und keine
+sitzungsübergreifende Aufnahmeerlaubnis eingeführt: jede Aufnahme braucht weiterhin
+einen neuen ausdrücklichen Bildschirmbefehl.
+
+Status zeigt die tatsächlichen Schritte: Zielmonitor ermitteln, gegebenenfalls
+Zustimmung abwarten, Monitor aufnehmen, Übertragung starten, Antwort auswerten,
+Bildanalyse abgeschlossen und Sprachantwort anfordern/erstellen/beenden. Bei
+Abbruch wird dieser angezeigt. Nach Erfolg, Fehler oder Abbruch wird die normale
+Gesprächsbereitschaft samt unverändertem 45-Sekunden-Idle-Timer wiederhergestellt.
+Während einer laufenden Desktop-Verarbeitung bleibt die bestehende Werkzeugblockade
+wirksam. Neue Diagnose-Logs mit Bildinhalt, Transkript oder API-Schlüssel gibt es nicht.
+
+Die Korrektur ist automatisiert geprüft; eine erneute reale Windows-Prüfung steht
+aus. Insbesondere während Datenschutzdialog, Aufnahme, Netzwerk und Sprachausgabe
+Hintergrundgeräusche/zusätzliche Sprache erzeugen und danach normal weiterfragen;
+anschließend Stopp und alle übrigen Abbruchwege prüfen. Nach mindestens drei echten
+45-Sekunden-Disconnects denselben Bildschirmbefehl erneut sagen: ein Dialog pro
+App-Start, genau eine Aufnahme pro neuem Befehl. Nach vollständigem App-Neustart
+muss die Zustimmung erneut erscheinen. Dabei alle fünf Charaktere und die
+bestehenden OpenAI-/Gemini-/lokalen Gesprächswege prüfen.
 
 ## Automatisierte Prüfung
 

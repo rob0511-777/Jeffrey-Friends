@@ -135,3 +135,22 @@ test('Auch täuschend formatierte Transportfehler dürfen keine privaten Inhalte
     assert.doesNotMatch(error.message,/sk-test|private image/);return true;
   });
 });
+
+
+test('Statusmeldungen folgen tatsächlichen Monitor-, Aufnahme- und Übertragungsschritten',async()=>{
+  const stages=[];
+  const f=fixture({onStatus:message=>stages.push(message),getSnapshot:async()=>{assert.match(stages.at(-1),/Zielmonitor/);return {monitors:[{id:'test',number:1,primary:true,bounds:{x:0,y:0,width:100,height:100}}]};},
+    capture:async()=>{assert.match(stages.at(-1),/wird aufgenommen/);return Buffer.from([255,216]);},
+    fetchImpl:async()=>{assert.match(stages.at(-1),/Übertragung/);return {ok:true,json:async()=>{assert.match(stages.at(-1),/Antwort.*ausgewertet/);return {output_text:'Ein Testfenster.'};}};}});
+  await f.service().analyze(question);assert.match(stages.at(-1),/Bildanalyse abgeschlossen/);
+  assert.doesNotMatch(stages.join(' '),/sk-test|data:image|Jeffrey/);
+});
+test('Echter Abbruch beendet laufenden HTTP-Aufruf und gibt den Dienst für nächste Fragen frei',async t=>{
+  t.mock.timers.enable({apis:['setInterval']});let current=true,signal,release,entered;
+  const ready=new Promise(done=>{entered=done;});
+  let requests=0;const f=fixture({capture:async()=>Buffer.from([255,216]),fetchImpl:async(_url,opts)=>{if(++requests>1)return {ok:true,json:async()=>({output_text:'Nächste Frage beantwortet.'})};signal=opts.signal;entered();return new Promise((resolve,reject)=>{release=()=>resolve({ok:true,json:async()=>({output_text:'Test'})});signal.addEventListener('abort',()=>reject(Error('aborted')),{once:true});});}});
+  const service=f.service(),task=assert.rejects(service.analyze(question,{isCurrent:()=>current}));await ready;
+  try{current=false;t.mock.timers.tick(100);assert.equal(signal.aborted,true);}
+  finally{release();await task;}
+  current=true;assert.equal(await service.analyze(question,{isCurrent:()=>current}),'Nächste Frage beantwortet.');assert.equal(requests,2);
+});

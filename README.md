@@ -63,6 +63,11 @@ Cloud-Übertragung erscheint ein gesonderter Datenschutzdialog. Es gibt keinen
 automatischen Screenshot bei fehlender Auswahl, keine Zwischenablageänderung und
 keine simulierten Eingaben. Unklare Kurzbefehle führen zu einer Rückfrage.
 
+Laufende Desktop-Anfragen bleiben bei zusätzlichen Spracherkennungsereignissen
+freigegeben. Abbrechen erfolgt ausdrücklich über „Stopp“, Schlafmodus,
+Ausblenden, Sitzungsende oder Charakterwechsel. Die einmalige Bild-Zustimmung
+gilt bis zum vollständigen App-Ende, auch nach dem 45-Sekunden-Idle-Disconnect.
+
 **Implementiert, unter Windows noch manuell zu prüfen:** UI Automation,
 Fokuswechsel, mehrere reale Monitore und gemischte DPI-Skalierung. Gemini Live hat
 hier keinen geeigneten Bild-/Textauswahl-/Vorlesepfad; es gibt keinen automatischen

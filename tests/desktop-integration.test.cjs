@@ -7,28 +7,28 @@ const path=require('node:path');
 const {createRequire}=require('node:module');
 const root=path.join(__dirname,'..'),read=file=>fs.readFileSync(path.join(root,file),'utf8');
 function mainHarness(service,selection){
-  const sent=[],spoken=[];const sender={isLoading:()=>false,send:(_channel,message)=>sent.push(message)};
-  const window={webContents:sender,isDestroyed:()=>false};
+  let onAction;const sent=[],spoken=[];const sender={isLoading:()=>false,send:(_channel,message)=>{sent.push(message);onAction?.(message);}};
+  const window={webContents:sender,isDestroyed:()=>false,setTitle(){}};
   const localRequire=createRequire(path.join(root,'main.cjs'));
   const context=vm.createContext({console,setTimeout:()=>1,clearTimeout(){},setInterval:()=>1,clearInterval(){},process,Buffer,URL,fetch:()=>{throw Error('No live requests');},
     require:name=>name==='electron'?{app:{commandLine:{appendSwitch(){}},requestSingleInstanceLock:()=>false,quit(){}}}:name==='./voicing.cjs'?{speak:text=>{spoken.push(text);return {promise:Promise.resolve(''),stop(){}};}}:localRequire(name)});
   vm.runInContext(read('main.cjs')+`\nglobalThis.api={doChat,handleAction,readSelectedAloud,analyzeLiveDesktop:typeof analyzeLiveDesktop==='function'?analyzeLiveDesktop:null,setup(s,w,vision,selection){settings=s;controls=w;desktopVision=vision;selectedText=selection;liveActive=true;liveSessionId='test-session';},setSleep(){settings.mode='sleep';},transcript(){return lastUserTranscript;}};`,context);
   context.api.setup({character:'bronco',mode:'active',aiProvider:'openai',speakReplies:true},window,service,selection);
-  return {api:context.api,sender,sent,spoken};
+  return {api:context.api,sender,sent,spoken,onAction(fn){onAction=fn;}};
 }
 function rendererHarness(main,media={}){
   const messages=[],errors=[],elements={},nativeEvents=[];
-  const callbacks={};
+  const callbacks={},timers=new Map();let timerId=0;
   const native={send:(action,value)=>{nativeEvents.push({action,value});return main.api.handleAction({sender:main.sender},{action,value});},
     inspectDesktop:question=>main.api.analyzeLiveDesktop({sender:main.sender},question),
-    onGeminiEvent:fn=>callbacks.gemini=fn,onAction:fn=>callbacks.action=fn,onState:fn=>callbacks.state=fn,openWebsite:async()=>{throw Error('must not open');}};
-  const context=vm.createContext({console,URLSearchParams,...media.globals,setTimeout:()=>1,clearTimeout(){},clearInterval(){},setInterval:()=>1,
+    onGeminiEvent:fn=>callbacks.gemini=fn,onAction:fn=>{callbacks.action=fn;main.onAction(fn);},onState:fn=>callbacks.state=fn,openWebsite:async()=>{throw Error('must not open');}};
+  const context=vm.createContext({console,URLSearchParams,...media.globals,setTimeout:(fn,delay)=>{const id=++timerId;timers.set(id,{fn,delay});return id;},clearTimeout:id=>timers.delete(id),clearInterval(){},setInterval:()=>1,
     location:{search:'?mode=controls'},document:{getElementById:id=>elements[id]||(elements[id]={addEventListener(){},textContent:'',hidden:true})},
     window:{desktopRobot:native,RobotVoiceCommands:require('../voice-commands.js'),addEventListener(){},...media.window }});
   vm.runInContext(read('realtime.js').replace(/\}\)\(\);\s*$/, 'globalThis.api={handleEvent,sendDesktopReadout,setCurrent(c){current=c;}};})();'),context);
   const c={provider:'openai',dc:{readyState:'open',send:value=>messages.push(JSON.parse(value))},stopped:false,userSpeaking:false,botSpeaking:false,toolsInFlight:0,seenCalls:new Set()};
   context.api.setCurrent(c);
-  return {event:event=>context.api.handleEvent(event,c),readout:()=>context.api.sendDesktopReadout(c),messages,elements,c,errors,callbacks,nativeEvents};
+  return {event:event=>context.api.handleEvent(event,c),readout:()=>context.api.sendDesktopReadout(c),messages,elements,c,errors,callbacks,nativeEvents,timers,fireIdle(){const timer=timers.get(c.idleTimer);assert.ok(timer);assert.equal(timer.delay,45000);timers.delete(c.idleTimer);timer.fn();}};
 }
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
 
@@ -65,6 +65,8 @@ test('Doppelte Live-Transkripte lösen genau eine Analyse aus, die Antwort bleib
 test('Nach neuem Sprechbeginn darf derselbe Desktop-Befehl eine neue Aufnahme auslösen',async()=>{
   let count=0;const main=mainHarness({analyze:async()=>{count++;return 'Text';}}),renderer=rendererHarness(main);
   renderer.event({type:'conversation.item.input_audio_transcription.completed',item_id:'first',transcript:'Jeffrey, was siehst du'});await tick();
+  renderer.event({type:'response.created',response:{id:'first-readout',metadata:{desktop:'readout'}}});
+  renderer.event({type:'response.done',response:{id:'first-readout',status:'completed'}});
   renderer.event({type:'input_audio_buffer.speech_started'});
   renderer.event({type:'conversation.item.input_audio_transcription.completed',item_id:'second',transcript:'Jeffrey, was siehst du'});await tick();
   assert.equal(count,2);
@@ -102,10 +104,10 @@ test('Preload gibt nur Textanalyse frei; Bilder und Schlüssel verlassen den Hau
   assert.doesNotMatch(read('preload.cjs'),/captureScreen|getScreenshot|desktopCapturer/);
 });
 
-test('Eine neue Äußerung während der Analyse unterdrückt die veraltete Antwort',async()=>{
+test('Ein ausdrückliches Stopp während der Analyse unterdrückt die veraltete Antwort',async()=>{
   let resolve;const main=mainHarness({analyze:()=>new Promise(done=>{resolve=done;})}),renderer=rendererHarness(main);
   renderer.event({type:'conversation.item.input_audio_transcription.completed',item_id:'pending',transcript:'Jeffrey, was siehst du'});
-  renderer.event({type:'input_audio_buffer.speech_started'});
+  renderer.event({type:'conversation.item.input_audio_transcription.completed',item_id:'explicit-stop',transcript:'Stopp'});
   resolve('Veraltete private Analyse');await tick();
   assert.equal(renderer.messages.some(x=>x.type==='response.create'),false);
 });
@@ -206,12 +208,14 @@ for(const status of ['cancelled','failed']){
   });
 }
 
-test('Abbruch einer laufenden Analyse durch neue Sprache blockiert keine normale Antwort',async()=>{
+test('Ein Analysefehler nach Sprachrauschen blockiert keine normale Antwort',async()=>{
   let reject;const main=mainHarness({analyze:()=>new Promise((_resolve,fail)=>{reject=fail;})}),renderer=rendererHarness(main);
   renderer.event({type:'conversation.item.input_audio_transcription.completed',item_id:'interrupted',transcript:'Jeffrey, was siehst du'});
   renderer.event({type:'input_audio_buffer.speech_started'});
-  reject(Error('Anfrage nicht mehr aktiv.'));await tick();
-  assert.equal(renderer.messages.some(x=>x.type==='response.create'),false);
+  reject(Error('Bildanalyse nicht erreichbar.'));await tick();
+  assert.equal(renderer.messages.filter(x=>x.type==='response.create').length,1);
+  renderer.event({type:'response.created',response:{id:'failed-analysis-readout',metadata:{desktop:'readout'}}});
+  renderer.event({type:'response.done',response:{id:'failed-analysis-readout',status:'completed'}});
   assertNormalConversation(renderer,main);
 });
 
@@ -322,4 +326,143 @@ test('Ausblenden verwirft auch eine Auswahl ohne laufenden Windows-Sprechprozess
   let release,current;const main=mainHarness({analyze:async()=>''},{execute:async(_action,opts)=>{current=opts.isCurrent;await new Promise(done=>{release=done;});return {private:true,spoken:true};}});
   const task=main.api.doChat('Lies mir das vor');main.api.handleAction({sender:main.sender},{action:'hide'});
   const valid=current();release();await task;assert.equal(valid,false);
+});
+
+
+// Windows regression: use the real authorization checks with gated OS/network
+// boundaries. No real pixels, transcripts from users, keys or paid API requests.
+function desktopRegression(phase){
+  const {createDesktopVision}=require('../desktop-vision.cjs');
+  let enter,release,error;const reached=new Promise(done=>{enter=done;}),gate=new Promise(done=>{release=done;});
+  const calls={consent:0,capture:0,fetch:0};
+  async function step(name){if(name===phase){enter();await gate;}}
+  const service=createDesktopVision({platform:'win32',getProvider:()=> 'openai',getKey:()=> 'mock-key',isAllowed:()=>true,checkBudget(){},
+    getSnapshot:async()=>{await step('snapshot');return {monitors:[{id:'test',number:1,primary:true,bounds:{x:0,y:0,width:100,height:100}}]};},
+    requestConsent:async()=>{calls.consent++;await step('consent');return true;},
+    capture:async()=>{calls.capture++;await step('capture');return Buffer.from([255,216,255,217]);},
+    fetchImpl:async()=>{calls.fetch++;await step('fetch');return {ok:true,json:async()=>({output_text:'Ein Testfenster.'})};}});
+  return {service:{analyze:async(...args)=>{try{return await service.analyze(...args);}catch(e){error=e.message;throw e;}}},calls,reached,release,get error(){return error;}};
+}
+for(const phase of ['snapshot','consent','capture','fetch'])test(`Sprachrauschen während ${phase} entzieht keiner laufenden Aufnahme die Freigabe`,async()=>{
+  const f=desktopRegression(phase),main=mainHarness(f.service),renderer=rendererHarness(main);
+  renderer.event({type:'conversation.item.input_audio_transcription.completed',item_id:'request',transcript:'Jeffrey, was siehst du'});
+  await f.reached;const generation=renderer.c.desktopGeneration;
+  renderer.event({type:'input_audio_buffer.speech_started'});
+  renderer.event({type:'input_audio_buffer.speech_stopped'});
+  renderer.event({type:'conversation.item.input_audio_transcription.completed',item_id:'noise',transcript:'Ein Hintergrundgeräusch'});
+  renderer.event({type:'conversation.item.input_audio_transcription.failed'});
+  f.release();await tick();
+  assert.equal(f.error,undefined,'Laufende Freigabe bleibt gültig');
+  assert.equal(renderer.c.desktopGeneration,generation);assert.equal(renderer.c.desktopPending,false);
+  assert.equal(f.calls.capture,1);assert.equal(f.calls.fetch,1);
+  assert.equal(renderer.messages.filter(m=>m.type==='response.create').length,1);
+});
+test('Hauptprozess bewahrt die laufende Freigabe unabhängig vom letzten Transkript',async()=>{
+  let current,release;const main=mainHarness({analyze:async(_q,opts)=>{current=opts.isCurrent;await new Promise(done=>{release=done;});return 'Ein Testfenster.';}});
+  const send=text=>main.api.handleAction({sender:main.sender},{action:'realtime-activity',value:{kind:'user',text}});
+  send('Jeffrey, was siehst du');const task=main.api.analyzeLiveDesktop({sender:main.sender},'Jeffrey, was siehst du');
+  main.api.handleAction({sender:main.sender},{action:'realtime-activity',value:{kind:'user-speaking'}});
+  send('Ein Hintergrundgeräusch');const stillCurrent=current();release();await task;assert.equal(stillCurrent,true);
+});
+test('Renderer erhält ausstehende Analyse auch ohne neuen endgültigen Text nach VAD',async()=>{
+  let release;const main=mainHarness({analyze:()=>new Promise(done=>{release=done;})}),renderer=rendererHarness(main);
+  renderer.event({type:'conversation.item.input_audio_transcription.completed',item_id:'request',transcript:'Schau mal'});
+  renderer.event({type:'input_audio_buffer.speech_started'});
+  assert.equal(renderer.c.desktopBlocked,true);release('Ein Testfenster.');await tick();
+  assert.equal(renderer.messages.filter(m=>m.type==='response.create').length,1);
+  renderer.event({type:'response.created',response:{id:'readout',metadata:{desktop:'readout'}}});
+  renderer.event({type:'response.done',response:{id:'readout',status:'completed'}});assertNormalConversation(renderer,main);
+});
+test('Erneute Bildschirmfragen nach echtem 45-Sekunden-Idle behalten Zustimmung nur im App-Prozess',async()=>{
+  const f=desktopRegression('none'),main=mainHarness(f.service);
+  for(let session=0;session<3;session++){
+    main.api.handleAction({sender:main.sender},{action:'realtime-activity',value:{kind:'opened'}});
+    const renderer=rendererHarness(main);
+    renderer.event({type:'conversation.item.input_audio_transcription.completed',item_id:'same-item',transcript:'Jeffrey, was siehst du'});await tick();
+    assert.equal(renderer.messages.filter(m=>m.type==='response.create').length,1);
+    renderer.event({type:'response.created',response:{id:'readout',metadata:{desktop:'readout'}}});
+    renderer.event({type:'response.done',response:{id:'readout',status:'completed'}});
+    renderer.fireIdle();assert.equal(renderer.c.stopped,true);
+  }
+  assert.equal(f.calls.consent,1);assert.equal(f.calls.capture,3);assert.equal(f.calls.fetch,3);
+  const restarted=desktopRegression('none'),newMain=mainHarness(restarted.service),newRenderer=rendererHarness(newMain);
+  newRenderer.event({type:'conversation.item.input_audio_transcription.completed',item_id:'restart',transcript:'Jeffrey, was siehst du'});await tick();assert.equal(restarted.calls.consent,1);
+});
+test('Stopp-Schaltfläche verwirft Analyse ohne nachträgliche Fehler-Sprachantwort',async()=>{
+  const f=desktopRegression('capture'),main=mainHarness(f.service),renderer=rendererHarness(main);
+  renderer.event({type:'conversation.item.input_audio_transcription.completed',item_id:'request',transcript:'Schau mal'});await f.reached;
+  main.api.handleAction({sender:main.sender},{action:'stop-speaking'});f.release();await tick();
+  assert.equal(renderer.messages.some(m=>m.type==='response.create'),false);assert.equal(renderer.c.desktopPending,false);
+  assert.match(renderer.elements['realtime-status'].textContent,/abgebrochen/);
+  assertNormalConversation(renderer,main);
+});
+test('Nach gesprochenem Stopp läuft die unveränderte 45-Sekunden-Kostenbegrenzung wieder',async()=>{
+  const f=desktopRegression('capture'),main=mainHarness(f.service),renderer=rendererHarness(main);
+  renderer.event({type:'conversation.item.input_audio_transcription.completed',item_id:'request',transcript:'Schau mal'});await f.reached;
+  renderer.event({type:'conversation.item.input_audio_transcription.completed',item_id:'stop',transcript:'Stopp'});f.release();await tick();
+  assert.equal(renderer.c.desktopPending,false);assert.equal(renderer.c.toolsInFlight,0);renderer.fireIdle();assert.equal(renderer.c.stopped,true);
+});
+
+
+for(const action of ['sleep','closed','character'])test(`Ausdrücklicher Abbruch ${action} bleibt trotz Sprachrauschen wirksam`,async()=>{
+  const f=desktopRegression('capture'),main=mainHarness(f.service),renderer=rendererHarness(main);
+  renderer.event({type:'conversation.item.input_audio_transcription.completed',item_id:'request',transcript:'Schau mal'});await f.reached;
+  renderer.event({type:'input_audio_buffer.speech_started'});
+  if(action==='sleep')main.api.handleAction({sender:main.sender},{action:'mode',value:'sleep'});
+  else if(action==='character')main.api.handleAction({sender:main.sender},{action:'character',value:'kelly'});
+  else renderer.event({type:'session.closed'});
+  f.release();await tick();assert.equal(f.calls.fetch,0);assert.equal(renderer.messages.some(m=>m.type==='response.create'),false);
+});
+test('Stopp im Textchat erzeugt keine irreführende Freigabe-Fehlermeldung',async()=>{
+  const f=desktopRegression('capture'),main=mainHarness(f.service);
+  const task=main.api.doChat('Schau mal');await f.reached;
+  main.api.handleAction({sender:main.sender},{action:'stop-speaking'});f.release();await task;
+  assert.equal(main.sent.some(m=>m.action==='voice-error'),false);
+});
+test('VAD während der Desktop-Sprachausgabe verwirft weder Antwort noch Werkzeugblockade',async()=>{
+  const main=mainHarness({analyze:async()=> 'Ein Testfenster.'}),renderer=rendererHarness(main);
+  renderer.event({type:'conversation.item.input_audio_transcription.completed',item_id:'question',transcript:'Schau mal'});await tick();
+  renderer.event({type:'response.created',response:{id:'readout',metadata:{desktop:'readout'}}});
+  renderer.event({type:'input_audio_buffer.speech_started'});
+  renderer.event({type:'conversation.item.input_audio_transcription.completed',item_id:'noise',transcript:'Ein Hintergrundgeräusch'});
+  assert.equal(renderer.c.desktopBlocked,true);assert.equal(renderer.c.botSpeaking,true);
+  renderer.event({type:'response.done',response:{id:'readout',status:'completed'}});assertNormalConversation(renderer,main);
+});
+test('Verspätet erstellte Desktop-Sprachantwort nach Stopp wird abgebrochen',async()=>{
+  const main=mainHarness({analyze:async()=> 'Ein Testfenster.'}),renderer=rendererHarness(main);
+  renderer.event({type:'conversation.item.input_audio_transcription.completed',item_id:'question',transcript:'Schau mal'});await tick();
+  main.api.handleAction({sender:main.sender},{action:'stop-speaking'});
+  renderer.event({type:'response.created',response:{id:'late-readout',metadata:{desktop:'readout'}}});
+  assert.equal(renderer.c.botSpeaking,false);assert.ok(renderer.messages.some(m=>m.type==='response.cancel'&&m.response_id==='late-readout'));
+  renderer.event({type:'response.done',response:{id:'late-readout',status:'cancelled'}});assertNormalConversation(renderer,main);
+});
+test('Desktop-response.done ohne response.created gibt Gespräch und Kosten-Timer frei',async()=>{
+  const main=mainHarness({analyze:async()=> 'Ein Testfenster.'}),renderer=rendererHarness(main);
+  renderer.event({type:'conversation.item.input_audio_transcription.completed',item_id:'question',transcript:'Schau mal'});await tick();
+  renderer.event({type:'response.done',response:{id:'readout',metadata:{desktop:'readout'},status:'completed'}});
+  assertNormalConversation(renderer,main);renderer.fireIdle();
+});
+test('Ein Stopp sendet für dieselbe Sprachantwort nur einen Abbruch',async()=>{
+  const main=mainHarness({analyze:async()=> 'Ein Testfenster.'}),renderer=rendererHarness(main);
+  renderer.event({type:'conversation.item.input_audio_transcription.completed',item_id:'question',transcript:'Schau mal'});await tick();
+  renderer.event({type:'response.created',response:{id:'readout',metadata:{desktop:'readout'}}});
+  renderer.event({type:'conversation.item.input_audio_transcription.completed',item_id:'stop',transcript:'Stopp'});
+  assert.equal(renderer.messages.filter(m=>m.type==='response.cancel'&&m.response_id==='readout').length,1);
+});
+test('Nächster bestätigter Gesprächssatz funktioniert auch ohne vorausgehendes VAD-Ereignis',async()=>{
+  const main=mainHarness({analyze:async()=> 'Ein Testfenster.'}),renderer=rendererHarness(main);
+  renderer.event({type:'conversation.item.input_audio_transcription.completed',item_id:'question',transcript:'Schau mal'});await tick();
+  renderer.event({type:'response.created',response:{id:'readout',metadata:{desktop:'readout'}}});
+  renderer.event({type:'response.done',response:{id:'readout',status:'completed'}});
+  renderer.event({type:'conversation.item.input_audio_transcription.completed',item_id:'next',transcript:'Hallo, wie geht es dir?'});
+  renderer.event({type:'response.created',response:{id:'next-reply'}});assert.equal(renderer.c.botSpeaking,true);
+  assert.equal(renderer.messages.some(m=>m.type==='response.cancel'&&m.response_id==='next-reply'),false);
+});
+test('Absichtlicher IPC-Abbruch wird als Abbruch bestätigt statt als Handlerfehler geworfen',async()=>{
+  const f=desktopRegression('capture'),main=mainHarness(f.service);
+  main.api.handleAction({sender:main.sender},{action:'realtime-activity',value:{kind:'user',text:'Schau mal'}});
+  const task=main.api.analyzeLiveDesktop({sender:main.sender},'Schau mal');
+  const result=task.then(value=>({value}),error=>({error}));await f.reached;
+  main.api.handleAction({sender:main.sender},{action:'stop-speaking'});f.release();
+  const ended=await result;assert.equal(ended.error,undefined);assert.equal(ended.value.cancelled,true);
 });
