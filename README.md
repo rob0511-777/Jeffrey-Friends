@@ -25,6 +25,7 @@ Kelly und Krak besitzen ein lokales, audio-synchronisiertes 2D-Viseme-Rig. Die M
 - Automatikmodus ohne kostenpflichtigen Cloud-Fallback ohne ausdrückliche Freigabe
 - eigene Stimme und Persönlichkeit pro Charakter
 - lokale Weckwörter und Sprachbefehle
+- Desktop auf ausdrücklichen Befehl einmalig betrachten, vorlesen und erklären
 - Aktiv-, Ruhe- und Schlafmodus
 - transparente Desktop-Darstellung mit Hologramm-Effekten
 - frei verschiebbare Position und einstellbare Größe
@@ -42,6 +43,18 @@ Kelly und Krak besitzen ein lokales, audio-synchronisiertes 2D-Viseme-Rig. Die M
 | **Automatisch – Kosten optimieren** | Kostenbewusste Auswahl zwischen Sitzungen | Kein kostenpflichtiger Audio-Fallback ohne ausdrückliche Freigabe |
 
 Der Anbieter bleibt während einer aktiven Sprachsitzung fest. Dadurch entstehen keine parallelen Mehrfachanfragen und kein hörbarer Anbieterwechsel mitten im Gespräch.
+
+### Desktop sehen und verstehen
+
+Alle fünf Charaktere reagieren beispielsweise auf „Schau dir meinen Bildschirm an“,
+„Lies mir diese Fehlermeldung vor“ oder „Was ist das für ein Fenster?“. Nach Zustimmung
+zur Cloud-Übertragung wird auf jeden ausdrücklichen Bildschirmbefehl genau eine
+Aufnahme des primären Windows-Bildschirms mit OpenAI ausgewertet und über die
+vorhandene Sprachausgabe erklärt. In der App bleiben die Bilder nur kurz im
+Arbeitsspeicher; es gibt keine dauerhafte Überwachung oder Computeraktionen.
+Die derzeitigen Gemini-Live- und lokalen Schnittstellen bieten keine Bildanalyse.
+Einrichtung, Datenschutz, Grenzen und manuelle Windows-Prüfschritte stehen in
+[Desktop sehen und verstehen](docs/DESKTOP-ERKENNUNG.md).
 
 ### Voraussetzungen
 

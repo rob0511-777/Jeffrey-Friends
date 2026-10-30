@@ -1,5 +1,5 @@
-// Erkennung lokaler direkter Sprachbefehle aus dem OpenAI-Transkript.
-// Keine freie Befehlsausführung: dies schließt nur das eigene Live-Gespräch.
+// Eng begrenzte direkte Sprachbefehle aus dem Transkript: Gespräch schließen
+// oder nach Zustimmung einmalig den Desktop betrachten. Keine freie Ausführung.
 (() => {
   function normalize(s) {
     return String(s || '').toLocaleLowerCase('de-DE')
@@ -26,7 +26,16 @@
     // Keine Sätze über das Verschwinden anderer Dinge oder Konjunktive.
     return /^(?:verschwinde|geh weg|geh schlafen|blende dich aus|verzieh dich)$/.test(text);
   }
-  const api={normalize,isDismissCommand};
+  // Absichtlich ganze, direkte Äußerungen: Zitate, Verneinungen und weitere
+  // Aktionen hinter dem Befehl sind keine Erlaubnis zur Bildschirmaufnahme.
+  function isDesktopCommand(utterance) {
+    if(typeof utterance!=='string'||utterance.length>300)return false;
+    let text=normalize(utterance);
+    text=text.replace(/^(?:(?:hey|hallo) )?(?:jeffrey|jeffry|jeffri|jeffray|jeffrei|dscheffri|dscheffrey|roboter|robot|kelly|kelli|kelley|keli|kellie|krak|krack|krakk|krag|crack|crag|kraak|bronco|bronko|broncho|branko|broncko|james|jaymes|dscheims|dschemes|dschejms) /,'');
+    text=text.replace(/^bitte /,'').replace(/ bitte$/,'');
+    return /^(?:schau(?:e)? dir (?:meinen|den) (?:bildschirm|desktop) an|was siehst du|lies mir (?:das|diesen text|diese fehlermeldung) vor|was (?:ist das fur ein fenster|habe ich hier geoffnet)|was bedeutet diese fehlermeldung|erklar(?:e)? mir (?:was auf meinem bildschirm passiert|diese fehlermeldung))$/.test(text);
+  }
+  const api={normalize,isDismissCommand,isDesktopCommand};
   if(typeof module==='object' && module.exports)module.exports=api;
   if(typeof window!=='undefined')window.RobotVoiceCommands=api;
 })();
