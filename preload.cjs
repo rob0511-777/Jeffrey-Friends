@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld('desktopRobot', {
     if (allowed.includes(action)) ipcRenderer.send('robot:action', {action, value});
   },
   connectRealtime: sdp => ipcRenderer.invoke('robot:realtime-connect', sdp),
+  inspectDesktop: question => ipcRenderer.invoke('robot:inspect-desktop', question),
   getProviderStatus: () => ipcRenderer.invoke('robot:provider-status'),
   listLocalModels: baseUrl => ipcRenderer.invoke('robot:local-models', baseUrl),
   startGemini: options => ipcRenderer.invoke('robot:gemini-start', options),

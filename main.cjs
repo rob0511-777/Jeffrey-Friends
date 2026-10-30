@@ -20,6 +20,8 @@ const {createCostTracker}=require('./cost-tracker.cjs');
 const {createLocalProvider}=require('./providers/local-provider.cjs');
 const {createGeminiLiveProvider}=require('./providers/gemini-live-provider.cjs');
 const {createProviderManager}=require('./provider-manager.cjs');
+const {isDesktopCommand}=require('./voice-commands.js');
+const {createDesktopVision}=require('./desktop-vision.cjs');
 const {MODES, CORNERS, GESTURES, AI_PROVIDERS, LIVE_VOICES, VOICE_STYLES, COMMENT_VOICES, COMMENT_FREQUENCIES, WAKE_SENSITIVITIES, BRONCO_VOICE_EFFECTS, JEFFREY_VOICE_EFFECTS, normalizeSettings, migrateStartupSettings, canSpontaneouslyComment, pickPhrase, nextCommentDelay} = require('./settings.cjs');
 
 let controls, overlay, tray, settings, file;
@@ -44,6 +46,18 @@ let lastPhraseText='';
 let lastAppRequest=null, lastSpokenAt=0, lastUserTranscript="", appLaunches=0, pcStatusCalls=0, pcMonitor=null, pcBusy=false, pcHighCount=0;
 const lastPcAlert={cpu:0,memory:0};
 let lastChatAt = 0;
+let desktopVision=null,lastDesktopRequest=null;
+function requireNonDesktopAction(){
+  if(lastDesktopRequest)throw new Error('Bildschirmfragen erlauben nur Lesen und Erklären.');
+}
+async function analyzeLiveDesktop(event,question){
+  const request=lastDesktopRequest,session=liveSessionId;
+  if(!controls||event.sender!==controls.webContents||!liveActive||settings.mode==='sleep'||
+     !request||request.used||request.question!==question||Date.now()-request.at>30000||!isDesktopCommand(question))
+    throw new Error('Kein aktueller ausdrücklicher Bildschirmbefehl freigegeben.');
+  request.used=true;
+  return desktopVision.analyze(question,{isCurrent:()=>liveActive&&liveSessionId===session&&lastDesktopRequest===request&&!controls.isDestroyed()});
+}
 function readAPIKey() {return keyStore?.read('openai')||'';}
 function saveAPIKey(value) {if(!keyStore)throw new Error('Schlüsselablage noch nicht bereit.');return keyStore.save('openai',value);}
 function selectedRealtimeProvider(){
@@ -69,6 +83,7 @@ function geminiToolDeclarations(){
 async function handleGeminiTool(call){
   if(!geminiSession||!call||typeof call.name!=='string')return;const args=call.args||{};let output='Aktion nicht verfügbar.';
   try{
+    requireNonDesktopAction();
     if(call.name==='get_pc_status'){
       if(!settings.pcToolsEnabled||pcStatusCalls>=5)throw new Error('PC-Status ist deaktiviert oder das Limit ist erreicht.');pcStatusCalls++;output=formatStatus(await systemSnapshot());
     }else if(call.name==='launch_application'){
@@ -117,6 +132,16 @@ async function doChat(text) {
   clearHideTimer();robotVisible = true;autoShowing = true;
   sendAction('comment',{gesture:'think',text:'Ich überlege gerade …'});
   try {
+    if(isDesktopCommand(prompt)){
+      let reply;
+      try{reply=await desktopVision.analyze(prompt);}catch(error){reply=String(error.message||'Bildanalyse nicht verfügbar.').slice(0,320);errorNotice(reply);}
+      if(settings.mode==='sleep')return;
+      sendAction('chat-line',{role:'assistant',text:reply});
+      sendAction('comment',{gesture:'talk',text:reply});
+      if(settings.speakReplies)await say(reply);
+      if(settings.mode!=='sleep'){clearHideTimer();hideTimer=setTimeout(hideRobot,10000);}
+      return;
+    }
     const memoryText = settings.memoryEnabled ? extractMemoryCommand(prompt) : null;
     if (memoryText) {
       const saved=addNote(memoryFile,memoryText);sendMemory();
@@ -475,13 +500,13 @@ function handleAction(event, payload) {
     if (kind === 'opened') {
       if (settings.mode === 'sleep') {sendAction('realtime-stop');return;}
       if(!liveSessionId)liveSessionId='live-'+Date.now();
-      liveActive=true;webCalls=0;lastWebCall=0;browserCalls=0;lastBrowserCall=0;appLaunches=0;pcStatusCalls=0;lastAppRequest=null;lastSpokenAt=0;lastUserTranscript="";
+      liveActive=true;webCalls=0;lastWebCall=0;browserCalls=0;lastBrowserCall=0;appLaunches=0;pcStatusCalls=0;lastAppRequest=null;lastSpokenAt=0;lastUserTranscript="";lastDesktopRequest=null;
       syncWakeListener();updateMenu();
       clearHideTimer();autoShowing=true;robotVisible=true;
       sendAction('show');updateMousePassThrough();
     } else if (kind === 'closed') {
       stopGemini('Renderer geschlossen');providerManager?.endSession(liveSessionId);liveSessionId='';
-      liveActive=false;
+      liveActive=false;lastDesktopRequest=null;
       if (tray) updateMenu();
       sendAction('speaking',false);
       if (autoShowing && robotVisible) hideRobot();
@@ -492,7 +517,10 @@ function handleAction(event, payload) {
       if (kind === 'reply' || kind === 'user') {
         const phrase = typeof value.text === 'string' ? value.text.trim().slice(0,1000) : '';
         if (!phrase) return;
-        if(kind==='user'){lastUserTranscript=phrase;const wanted=parseAppCommand(phrase);lastAppRequest=wanted?{id:wanted,at:Date.now(),used:false}:null;}
+        if(kind==='user'){
+          if(phrase!==lastUserTranscript)lastDesktopRequest=isDesktopCommand(phrase)?{question:phrase,at:Date.now(),used:false}:null;
+          lastUserTranscript=phrase;const wanted=parseAppCommand(phrase);lastAppRequest=wanted?{id:wanted,at:Date.now(),used:false}:null;
+        }
         if(kind==='user' && isExplicitMemoryRequest(phrase)){lastExplicitMemoryAt=Date.now();lastExplicitMemoryText=phrase;memoryUsed=false;}
         sendAction('chat-line',{role:kind==='user'?'user':'assistant',text:phrase});
         if (kind==='reply') {
@@ -507,7 +535,7 @@ function handleAction(event, payload) {
         robotVisible=true;autoShowing=true;clearHideTimer();
         sendAction('show');sendAction('speaking',true);updateMousePassThrough();
       } else if (kind === 'user-speaking') {
-        lastSpokenAt=Date.now();lastAppRequest=null;lastUserTranscript='';
+        lastSpokenAt=Date.now();lastAppRequest=null;lastUserTranscript='';lastDesktopRequest=null;
         robotVisible=true;autoShowing=true;clearHideTimer();
         sendAction('show');sendAction('speaking',false);updateMousePassThrough();
       } else if (kind === 'idle') {
@@ -646,6 +674,19 @@ else {
     controls = makeWindow({width:385, height:825, minWidth:355, minHeight:570,
       title:who()+' – Einstellungen', backgroundColor:'#142027', show:true}, 'controls');
     controls.on('close', event => { if (!isQuitting) { event.preventDefault(); controls.hide(); } });
+    desktopVision=createDesktopVision({
+      getProvider:()=>settings.aiProvider==='auto'?providerManager.activeProvider(liveSessionId)?.id||'auto':settings.aiProvider,
+      getKey:readAPIKey,isAllowed:()=>settings.mode!=='sleep',checkBudget:requirePaidBudget,
+      requestConsent:async()=>{
+        const choice=await dialog.showMessageBox({type:'question',title:who()+' – Bildschirmaufnahme erlauben?',
+          message:'Darf eine Aufnahme deines primären Bildschirms an OpenAI gesendet werden?',
+          detail:'Dein Bildschirm kann Passwörter, Nachrichten und andere vertrauliche Daten enthalten. Auf jeden ausdrücklichen Bildschirmbefehl wird genau ein Bild zur kostenpflichtigen KI-Auswertung an OpenAI übertragen. Bilder werden in der App nur kurz im Arbeitsspeicher gehalten und weder als Datei noch in Logs gespeichert. Für die Verarbeitung und mögliche Aufbewahrung durch OpenAI gelten dessen Datenschutzregeln. Es gibt keine dauerhafte Überwachung und keine Computeraktionen. Diese Zustimmung gilt bis zum Beenden der App. Schließe vertrauliche Inhalte vor dem Fortfahren.',
+          buttons:['Abbrechen','Zustimmen'],defaultId:0,cancelId:0,noLink:true});
+        return choice.response===1;
+      },
+      onStatus:message=>{status(message);sendAction('comment',{gesture:'think',text:message});},
+      onUsage:usage=>{costTracker.record({sessionId:liveSessionId||'desktop-'+Date.now(),...usage});sendProviderStatus();}
+    });
     // Schließen versteckt die Einstellungen, das laufende Gespräch kann im Hintergrund fortgesetzt werden.
     tray = new Tray(path.join(__dirname,'assets','tray.png'));
     tray.on('double-click', showControls);
@@ -658,6 +699,7 @@ else {
     ses.setPermissionCheckHandler((wc, permission) =>
       wc === controls.webContents && permission === 'media' && settings.mode !== 'sleep');
     ipcMain.on('robot:action', handleAction);
+    ipcMain.handle('robot:inspect-desktop',analyzeLiveDesktop);
     ipcMain.handle('robot:provider-status',event=>{if(event.sender!==controls.webContents)throw new Error('Nicht zugelassene Anfrage.');return providerStatus();});
     ipcMain.handle('robot:local-models',async(event,baseUrl)=>{if(event.sender!==controls.webContents)throw new Error('Nicht zugelassene Anfrage.');return localProvider.listModels(baseUrl);});
     ipcMain.handle('robot:gemini-start',async(event)=>{
@@ -669,7 +711,7 @@ else {
       const key=keyStore.read('gemini');if(!key)throw new Error('Bitte zuerst den Gemini-API-Schlüssel speichern.');
       liveSessionId='gemini-'+Date.now();geminiSessionId=liveSessionId;providerManager.beginSession(liveSessionId,'gemini');
       const voices={jeffrey:'Puck',kelly:'Aoede',krak:'Fenrir',bronco:'Orus',james:'Charon'};
-      geminiSession=geminiProvider.start({apiKey:key,model:settings.geminiModel,instruction:characterPrompt(settings.character),voice:voices[settings.character]||'Puck',tools:geminiToolDeclarations(),onEvent:message=>{
+      geminiSession=geminiProvider.start({apiKey:key,model:settings.geminiModel,instruction:characterPrompt(settings.character)+' Diese Gemini-Live-Schnittstelle kann keine Bildschirmbilder analysieren. Bei Bildschirmfragen sage klar: Bildanalyse ist hier nicht verfügbar; bitte OpenAI auswählen. Behaupte niemals, den Desktop zu sehen.',voice:voices[settings.character]||'Puck',tools:geminiToolDeclarations(),onEvent:message=>{
         if(message.type==='usage'){costTracker.record({sessionId:liveSessionId,provider:'gemini',model:settings.geminiModel,category:'audio',source:message.source,units:message.units});sendProviderStatus();}
         if(message.type==='user'){lastUserTranscript=message.text;const wanted=parseAppCommand(message.text);lastAppRequest=wanted?{id:wanted,at:Date.now(),used:false}:null;}
         if(message.type==='tool-call')void handleGeminiTool(message);
@@ -701,6 +743,7 @@ else {
       } finally {rtConnectionInProgress=false;}
     });
     ipcMain.handle('robot:remember-fact',async(event,fact)=>{
+      requireNonDesktopAction();
       if(!controls||event.sender!==controls.webContents||!liveActive||settings.mode==='sleep'||!settings.memoryEnabled)
         throw new Error('Gedächtnis ist nicht aktiviert oder kein Live-Gespräch.');
       // Schutz: Nur wenn zuletzt wirklich ein expliziter gesprochener Merkbefehl erkannt wurde.
@@ -711,6 +754,7 @@ else {
       return 'Merksatz gespeichert. '+notes.length+' lokale Merksätze vorhanden. Ab dem nächsten Gespräch nutzbar.';
     });
     ipcMain.handle('robot:web-search', async (event, query) => {
+      requireNonDesktopAction();
       if(!controls || event.sender !== controls.webContents) throw new Error('Nicht zugelassene Anfrage.');
       if(settings.mode==='sleep'||!settings.webEnabled||!liveActive)throw new Error('Websuche nicht aktiviert oder kein Live-Gespräch.');
       if(!validateSearchQuery(query))throw new Error('Bitte eine kürzere Suchanfrage verwenden.');
@@ -730,6 +774,7 @@ else {
       return formatStatus(await systemSnapshot());
     });
     ipcMain.handle('robot:launch-app',async(event,name)=>{
+      requireNonDesktopAction();
       if(!controls||event.sender!==controls.webContents||settings.mode==='sleep'||!settings.pcToolsEnabled||!liveActive)
         throw new Error('Programmstart ist deaktiviert oder kein Live-Gespräch aktiv.');
       if(appLaunches>=3)throw new Error('Höchstens drei Programmstarts pro Gespräch.');
@@ -754,11 +799,13 @@ Nur dieses Programm wird geöffnet.`,
         });
         if(choice.response!==1)throw new Error('Programmstart nicht freigegeben.');
       }
+      requireNonDesktopAction();
       if(settings.mode==='sleep'||!liveActive||appLaunches>=3)throw new Error('Gespräch nicht mehr aktiv oder Startlimit erreicht.');
       appLaunches++;
       return launchApplication(id);
     });
     ipcMain.handle('robot:search-idealo',async (event,query)=>{
+      requireNonDesktopAction();
       if (!controls || event.sender!==controls.webContents || !liveActive || settings.mode==='sleep' || !settings.browserEnabled)
         throw new Error('Idealo-Suche ist deaktiviert oder es läuft kein Live-Gespräch.');
       if(browserCalls>=4)throw new Error('Limit: Vier Browseraktionen pro Gespräch.');
@@ -768,6 +815,7 @@ Nur dieses Programm wird geöffnet.`,
       return opened;
     });
     ipcMain.handle('robot:open-website',async (event,website)=>{
+      requireNonDesktopAction();
       if (!controls || event.sender!==controls.webContents || !liveActive || settings.mode==='sleep' || !settings.browserEnabled)
         throw new Error('Webseitenaufruf ist deaktiviert oder kein Live-Gespräch läuft.');
       if(browserCalls>=4)throw new Error('Limit: Vier Webseiten pro Gespräch.');
