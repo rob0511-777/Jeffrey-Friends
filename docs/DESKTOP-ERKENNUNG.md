@@ -1,104 +1,176 @@
-# Desktop sehen und verstehen
+# Desktop sehen und verstehen – Vision 2.0
 
-Unter Windows kann Jeffrey & Friends auf einen direkten Befehl einmalig den
-primären Bildschirm lesen und erklären. Die Befehle gelten für Jeffrey, Kelly,
-Krak, Bronco und James, mit und ohne Namen, beispielsweise:
+Status: implementiert und mit automatisierten Mock-Tests geprüft. **Native
+Windows-Funktionen, Fokuswechsel, reale Monitore, Sprache und Audio wurden in der
+Linux-Umgebung nicht manuell verifiziert.** Kein Release-Nachweis.
 
-- „Jeffrey, schau dir meinen Bildschirm an.“
-- „James, was siehst du?“
-- „Bronco, lies mir diese Fehlermeldung vor.“
-- „Was ist das für ein Fenster?“
-- „Erklär mir, was auf meinem Bildschirm passiert.“
-- „Was bedeutet diese Fehlermeldung?“
-- „Was habe ich hier geöffnet?“
-- „Lies mir das vor.“
+## Bildschirm und Monitorauswahl
 
-Die vorhandenen Wege bleiben bestehen: OpenAI-Live-Gespräch, einmaliges Zuhören
-und Textchat. Die Live-Antwort nutzt dieselbe Audioverbindung, Stimme und Filter.
-Einmaliges Zuhören und Textchat nutzen weiterhin die vorhandene Windows-Ausgabe;
-die Einstellung „Antworten vorlesen“ gilt dort unverändert.
+Für Jeffrey, Bronco, Kelly, Krak und James, mit oder ohne Namen:
 
-## Anbieter und Datenschutz
+- „Schau mal.“ / „Guck dir das an.“ / „Was siehst du gerade?“
+- „Guck mal hier.“ / „Was ist in diesem Fenster?“
+- „Was steht auf meinem Bildschirm?“ / „Kannst du die Fehlermeldung erkennen?“
+- „Schau auf Bildschirm eins.“ / „Was ist auf Monitor zwei?“
+- „Lies mir Bildschirm drei vor.“
+- „Schau auf den linken Bildschirm.“ / „Guck auf den rechten Monitor.“
+- „Schau auf den Bildschirm mit meiner Maus.“
 
-Bildanalyse verwendet den bereits vorhandenen OpenAI-Responses-Endpunkt mit
-`gpt-4.1-mini`. Der gespeicherte Schlüssel bleibt im Hauptprozess. Vor der ersten
-Aufnahme fragt ein lokaler Dialog nach der Zustimmung zur kostenpflichtigen
-Übertragung an OpenAI. Abbrechen ist die Standardauswahl. Die Zustimmung gilt nur
-für den laufenden App-Prozess; nach vollständigem Beenden wird erneut gefragt.
-Jede Aufnahme erfordert zusätzlich einen neuen ausdrücklichen Bildschirmbefehl.
+Automatisch hat ein geeignetes aktives fremdes Anwendungsfenster Vorrang. Wenn
+Jeffreys Einstellungen, Overlay oder Datenschutzdialog den Fokus übernehmen,
+wird das zuletzt aktive geeignete fremde Fenster verwendet. Ist dieses geschlossen,
+minimiert oder ungültig, folgt der Mausmonitor; danach der primäre Monitor.
+Für die automatische Auswahl nicht verfügbare Windows-Metadaten führen ebenfalls
+zum primären Monitor. Eine unbekannte explizite Nummer erzeugt einen Hinweis,
+statt heimlich einen anderen Monitor aufzunehmen.
 
-Die aktuellen Gemini-Live- und lokalen Provider haben keinen implementierten
-Bildpfad. Ihre Realtime-/Text-Unterstützung wird nicht als Bildunterstützung
-ausgegeben. Bei fehlender Bildunterstützung gibt es keine Aufnahme und keinen
-automatischen Wechsel zu einer anderen Cloud. Automatik kann nur innerhalb einer
-bereits ausdrücklich freigegebenen OpenAI-Live-Sitzung deren Bildanalyse nutzen.
+**Monitornummern sind GDI-Gerätenummern `\\.\DISPLAYn`, nicht garantiert die Zahlen
+aus „Einstellungen → System → Anzeige“.** „Monitor zwei“ bezeichnet `DISPLAY2`.
+Die Zuordnung kann nach Umstecken wechseln; Nummern müssen nicht lückenlos sein.
+Links/rechts meint den kleinsten/größten physischen X-Ursprung; bei gleichem X
+entscheidet die Y-Position von oben nach unten. Für gestapelte oder gespiegelte
+Anzeigen sind Nummer oder Maus eindeutiger.
 
-Aufnahmen werden weder auf Datenträger geschrieben noch protokolliert. Das
-Kostenjournal bekommt nur Anbieter, Modell und Tokenzahlen. Bilder gelangen nicht
-in Renderer, Chatverlauf oder Gedächtnis. JPEG-Bildpuffer werden nach der
-Verarbeitung überschrieben, Anfrage-Referenzen freigegeben. `store:false` fordert
-keine abrufbare Speicherung der Responses-Antwort an; es garantiert keine
-vollständige Löschung beim Anbieter. Für dessen Verarbeitung und Aufbewahrung
-gelten die OpenAI-Regeln.
+Die Fenstererkennung hält ausschließlich ein Fenster-Handle im Arbeitsspeicher
+über Windows-Fokusereignisse (`SetWinEventHook`), ohne Titel, Auswahltexte oder
+Pixel zu beobachten. Monitorgeometrie und Mausposition werden erst auf Befehl
+abgefragt, vor einem Datenschutzdialog eingefroren und in physischen Pixeln
+verwendet. Per-Monitor-DPI-Awareness und negative Koordinaten sind berücksichtigt.
+Die bestehende Aufnahmefunktion kopiert genau einen Monitor, verkleinert das Bild
+proportional auf maximal 1600 Pixel und kodiert JPEG im Speicher. Bei veränderter
+Geometrie zwischen Auswahl und Aufnahme wird abgebrochen. Keine Hintergrundbilder,
+Bilddateien, Aufnahme-Timer oder autonome Computeraktionen.
 
-Die Aufnahme erfolgt über die bereits im Projekt verwendete Windows-PowerShell-
-Laufzeit mit einem festen Skript ohne Nutzereingaben. Electron `getSources`
-erzeugt Bildschirm-Thumbnails für alle Monitore. Deshalb kopiert das Skript
-gezielt nur `PrimaryScreen.Bounds`, genau einmal. Das Bild wird proportional auf
-höchstens 1600 Pixel an der längsten Seite verkleinert und als JPEG im Speicher
-kodiert. Timeout, Größenlimit und Entsorgung der GDI-Ressourcen sind begrenzt.
-Es gibt keine Aufnahme-Timer, Zwischenablage-Nutzung oder Computeraktionen.
+## Markierten Text lesen
 
-Die Auswertung beantwortet die konkrete Frage, kennzeichnet unleserliche Inhalte
-und behandelt Text im Bild als Daten. Sie hat keine Werkzeuge. Auch das Vorlesen
-im Live-Gespräch erfolgt ohne Werkzeuge und außerhalb des Gesprächskontexts.
-Doppelte Transkript-Ereignisse berechtigen nicht zu weiteren Bildern. Neue
-Nutzeräußerungen und beendete Sitzungen verwerfen veraltete Ergebnisse. Während
-einer offenen Zustimmungsabfrage wird noch kein Bild aufgenommen.
+- Vorlesen: „Lies mir das vor“, „Lies bitte den markierten Text“, „Kannst du das
+  hier vorlesen?“ oder „Lies mir das Markierte vor“.
+- Erklären: „Erklär mir das“, „Was bedeutet dieser Abschnitt?“ oder „Kannst du mir
+  das verständlich erklären?“.
+- Zusammenfassen: „Fasse das zusammen“, „Gib mir eine kurze Zusammenfassung“ oder
+  „Worum geht es in dem markierten Text?“.
+- Stoppen: „Stopp“, „Hör auf“, „Brich ab“ oder die Schaltfläche „Sprachausgabe
+  stoppen“. Schlafmodus, Ausblenden, Charakterwechsel und Sitzungsende brechen
+  laufende Aufträge ebenfalls ab. In Gemini beendet ein gesprochener Stopp die
+  Live-Sitzung, da kein separater Audio-Abbruchpfad implementiert ist.
+
+UI Automation liest ausschließlich nicht leere Auswahlbereiche von TextPattern
+im geeigneten fremden Fenster. Ein Cursor ohne Auswahl zählt nicht als markierter
+Text. Passwortfelder werden ausgelassen. Es werden keine Tastaturaktionen,
+Strg+C, Zwischenablagezugriffe, Fokusänderungen oder Ersatz-Screenshots ausgeführt.
+Es gibt keine Auswahlüberwachung und kein automatisches Vorlesen beim Markieren.
+
+Browser, Editoren, E-Mail-Programme und PDF-Reader funktionieren nur, soweit sie
+TextPattern-Auswahlen bereitstellen. Beispielsweise können gescannte PDFs,
+Canvas-Inhalte, geschützte/elevierte Fenster oder deaktivierte Accessibility
+unzugänglich sein. Mehrere unterschiedliche Auswahlen werden als mehrdeutig
+abgelehnt. UIA-Aufrufe sind zeitlich begrenzt. Maximal 24.000 Zeichen, für die
+bestehende lokale Textmodell-Schnittstelle maximal 3.500 Zeichen; bei Überschreitung
+wird um einen kürzeren Abschnitt gebeten. Kein heimliches Abschneiden.
+
+Ohne Auswahl folgt: „Ich sehe gerade keinen markierten Text. Soll ich stattdessen
+deinen Bildschirm untersuchen?“ Erst ein neuer ausdrücklicher Bildschirmbefehl
+(z. B. „Schau auf meinen Bildschirm“) erteilt Aufnahmeerlaubnis. Ein bloßes „Ja“
+wird nicht als Aufnahmebefehl interpretiert.
+
+„Was steht da?“ wird nur direkt nach einer erfolgreichen passenden Bildschirm-
+oder Auswahlaktion und innerhalb von 30 Sekunden entsprechend zugeordnet. Eine
+andere Nutzeräußerung, Stopp oder ein Sitzungswechsel löscht den Kontext. Sonst
+fragt die App lokal nach. Ganze Äußerungen werden deterministisch erkannt;
+Großschreibung, gebräuchliche Namensvarianten und Höflichkeit sind berücksichtigt.
+Zitate, Verneinungen, hypothetische Sätze und angehängte Aktionen sind keine
+Erlaubnis. Es gibt keine Cloudanfrage zur Befehlsinterpretation.
+
+## Anbieter, Sprache, Kosten und Datenschutz
+
+| Aktion | OpenAI | Lokal / Offline | Gemini Live |
+| --- | --- | --- | --- |
+| Bildschirm | Bestehendes `gpt-4.1-mini`, nach Bild-Zustimmung | Nicht unterstützt | Nicht unterstützt |
+| Auswahl vorlesen | Bestehendes `gpt-4o-mini-tts`, Charakterstimme | Vorhandene Windows-Stimme | Keine geeignete identische Vorleseschnittstelle |
+| Auswahl erklären / zusammenfassen | Bestehendes `gpt-4.1-mini` | Gewähltes lokales Textmodell; Offline ohne Modell nicht unterstützt | Kein geeigneter Textpfad |
+
+Kein automatischer kostenpflichtiger Providerwechsel. Automatik wird für neue
+Auswahlaufgaben nicht als Cloudfreigabe behandelt; eine bereits freigegebene aktive
+OpenAI-Sitzung kann ihren festgelegten Anbieter nutzen. Anbieter ohne geeigneten
+Pfad melden die Einschränkung ehrlich.
+
+Vorlesen überträgt nur ausgewählten Text an die vorhandene TTS-Schnittstelle und
+startet keine Text- oder Bildanalyse. Bis zu 600 Zeichen pro Abschnitt werden
+nacheinander vollständig verarbeitet, mit Budget- und Abbruchprüfung vor jedem
+weiteren Abschnitt. Die gewählte OpenAI-Charakterstimme, Sprechvorgaben,
+Jeffrey-/Bronco-Audiofilter und die vorhandene Mundanimation werden wiederverwendet.
+Lokal/Offline bleibt die bisherige Windows-Sprachausgabe. Die Vorleseaufforderung
+selbst gilt auch bei ausgeschaltetem „Antworten vorlesen“. Diese Einstellung gilt
+weiterhin für allgemeine Antworten sowie Erklärungen im Textchat.
+
+Die erste Bildübertragung pro App-Start benötigt die bestehende Bild-Zustimmung.
+Textauswahl benötigt eine **gesonderte** lokale Zustimmung vor der ersten
+OpenAI-Übertragung für TTS, Erklärung oder Zusammenfassung. Beide Dialoge erklären
+Kosten und vertrauliche Inhalte; Abbrechen ist Standard. Zustimmung gilt nur bis
+zum vollständigen Beenden der App. Lokale Auswahlverarbeitung verlangt keine
+Cloudzustimmung. Bei Ablehnung oder Budgetblockade keine entsprechende Übertragung.
+
+Die Auswahl gelangt nicht in Gedächtnis oder dauerhafte Logs. Direkt vorgelesener
+Rohtext wird auch nicht in den Chat geschrieben. Nur Audioabschnitte werden zur
+Wiedergabe an das eigene Einstellungsfenster gegeben, ohne Rohtext. Referenzen
+werden nach Verarbeitung freigegeben, Bild- und native stdout-Puffer nach Gebrauch
+überschrieben; unveränderliche JavaScript-/PowerShell-Strings können nicht sicher
+aus dem Prozessspeicher gelöscht werden. Bei Erklärung/Zusammenfassung erhält das
+Textmodell den ausgewählten Text als Daten ohne Werkzeuge oder Gesprächshistorie.
+Auch die Live-Vorleseantwort verwendet keine Werkzeuge. Anweisungen im Inhalt
+berechtigen nie zu Programmstarts, Maus-/Tastatureingaben oder Dateiaktionen.
+
+Kostenjournal: ausschließlich Modell/Anbieter, Einheiten und Kostenmetadaten.
+TTS-Kosten sind eine grobe, vorsorgliche lokale Schätzung von 15 EUR pro Million
+Zeichen, bereits vor jedem begonnenen Abschnitt gezählt, keine Anbieterrechnung.
+Auch fehlgeschlagene begonnene TTS-Anfragen können kostenpflichtig sein.
+Textanalyse verwendet gemeldete Tokenzahlen. Monatsbudget und Budgetblockade
+bleiben wirksam. Bereits erfolgte Übertragungen lassen sich durch Stopp nicht
+zurückholen; spätere Abschnitte und veraltete Ausgaben werden unterdrückt.
+
+`store:false` wird für Responses verwendet. Das garantiert keine vollständige
+Löschung beim Anbieter. Für Cloudverarbeitung und Aufbewahrung gelten die
+OpenAI-Regeln. Vor der Zustimmung sensible Inhalte schließen bzw. abwählen.
 
 ## Automatisierte Prüfung
 
 ```sh
 npm test
+# Alternative bei eingeschränkter Node-Subprozess-Isolation:
+node --test --test-isolation=none tests/*.test.cjs
 ```
 
-Alle neuen Tests verwenden Mock-Bilder, Mock-Transport und Mock-Windows-Aufnahme;
-es werden keine kostenpflichtigen APIs aufgerufen. Die beiden neuen Testsuiten
-prüfen direkte Befehle für alle Figuren, Ablehnung uneindeutiger Aussagen,
-Zustimmung, Berechtigungen, Einmaligkeit, Providerübergabe, nicht unterstützte
-Provider, Fehlerbereinigung, Bildpuffer-Lebensdauer, Kostenmetadaten, IPC,
-Sprachantwort und verspätete/doppelte Realtime-Ereignisse. Die bestehenden
-Charakter-, Stimmen-, Animations-, Wakeword- und Provider-Tests laufen mit.
+Alle neuen Tests verwenden Fake-Windows-Zugriffe, Mock-Bilder, Mock-Audio oder
+Mock-HTTP. Keine kostenpflichtigen Live-API-Aufrufe. Abgedeckt sind Befehle,
+Monitorauswahl/Fallbacks, negative Positionen und physische DPI-Geometrie,
+Textauswahlzustände, Zustimmung, Kostenprüfung, Stopp, lange Ausgaben,
+Werkzeugblockade und die bestehende Charakter-/Provider-/Animations-Regression.
+Mock-Tests belegen keine native Windows-Kompatibilität.
 
-## Manuelle Windows-Tests – in Linux nicht verifiziert
+## Manuelle Windows-Prüfliste – noch nicht durchgeführt
 
-1. App vollständig neu starten, OpenAI mit gültigem Schlüssel auswählen. Im
-   Live-Gespräch einen Bildschirmbefehl sagen: Datenschutzdialog erscheint,
-   Standard ist Abbrechen. Ablehnen: keine Aufnahme, klare Rückmeldung. Erneut
-   fragen und zustimmen: sichtbarer Verarbeitungsstatus und gesprochene Analyse.
-2. Einen gut lesbaren Beispieldialog ohne private Daten öffnen. Fehlermeldung
-   vorlesen, erklären und nächsten Schritt nennen lassen. Fenstererkennung und
-   allgemeine Beschreibung testen. Kleine/verdeckte Schrift muss als unklar
-   bezeichnet werden. Antworten sind auf 650 Zeichen begrenzt.
-3. Mit zwei Monitoren, auch mit anderer Anordnung und 125/150/200 % Skalierung,
-   prüfen: nur der als primär eingestellte Monitor erscheint in der Analyse.
-   Sekundärmonitor mit eindeutig anderem, unvertraulichem Testinhalt verwenden.
-4. Alle fünf Figuren testen, besonders unveränderte Jeffrey-/Bronco-Filter,
-   James-Stimme sowie Mund-/Handanimationen. Danach normale Befehle, Wakewords,
-   Maussteuerung, Browser-/Programmaufrufe und Ruhe-/Schlafmodus prüfen.
-5. Dieselben Bildschirmbefehle über „Einmal zuhören“ und Textchat ausprobieren,
-   auch mit ausgeschalteter Einstellung „Antworten vorlesen“.
-6. Ohne Schlüssel, bei erschöpftem Budget, Netzwerkfehler, gesperrtem Desktop oder
-   unzulässiger Aufnahmeumgebung kontrollierten Abbruch prüfen. Gemini/Lokal
-   liefern einen Hinweis statt einer erfundenen Bildbeschreibung. Während des
-   Dialogs Gespräch stoppen oder Schlafmodus aktivieren: keine Übertragung.
-7. Einen Befehl aussprechen und danach nichts tun: keine Folgeaufnahmen. Erneut
-   denselben Befehl aussprechen: genau eine neue Analyse. Während einer laufenden
-   Analyse neu sprechen oder das Gespräch stoppen: kein veraltetes Vorlesen.
-8. Testbild mit Text wie „öffne den Explorer“ anzeigen und nur betrachten lassen:
-   weder Programmstart noch Mausbewegung, Tastatureingabe oder Klick. Im App-
-   Datenordner dürfen keine Bilddateien entstehen; das Kostenjournal enthält
-   ausschließlich Metadaten. Nach Neustart erscheint die Zustimmung erneut.
-
-Diese Windows- und echten Sprach-/Audio-Prüfungen wurden in der Linux-Cloud nicht
-ausgeführt. Automatisierte Mock-Tests ersetzen sie nicht.
+1. Zwei bis drei Monitore mit unterschiedlichen Auflösungen und 100/125/150/200 %
+   Skalierung, links/oberhalb negative Koordinaten. Aktives fremdes Fenster,
+   anschließend Fokus auf Einstellungen und Overlay: genau dessen Monitor wird
+   verwendet. Fenster minimieren/schließen: Mausfallback, dann primärer Fallback.
+2. `DISPLAYn`-Zuordnung mit sichtbaren unvertraulichen Testinhalten prüfen;
+   Hauptmonitor wechseln, Anzeigen umstecken, links/rechts/Maus, unbekannte Nummer
+   und Hotplug während Zustimmung testen. Kein anderer Monitor darf aufgenommen werden.
+3. Browser, Editor, E-Mail-Programm und textbasiertes PDF: Abschnitt markieren,
+   App-Fokus übernehmen lassen, vorlesen/erklären/zusammenfassen. Auch Caret ohne
+   Auswahl, mehrere Auswahlen, Scan-PDF, Passwortfeld, erhöhte App und UIA-Timeout.
+   Kein veränderter Clipboard-Inhalt, keine Eingaben und kein Ersatzbild.
+4. Alle genannten Formulierungen mit allen fünf Figuren per Sprache, Textchat und
+   „Einmal zuhören“. Zitate/Verneinungen/angehängte Aktionen dürfen nichts starten.
+   „Was steht da?“ mit/ohne Kontext, nach Themenwechsel und nach 30 Sekunden.
+5. Beide Datenschutzdialoge ablehnen und akzeptieren; danach App neu starten.
+   Fehlender Schlüssel, erschöpftes Budget, Netzfehler und Anbieterwechsel.
+   Mit Lokal/Offline/Gemini keine heimlichen Cloudwechsel oder Bilder.
+6. Lange Auswahl vollständig vorlesen; Zeichenlimits prüfen. Jeffrey-/Bronco-Filter,
+   James-/Kelly-/Krak-Stimme, Mund-/Handanimation. Stopp während UIA, Dialog,
+   Netzwerk und Audio; neue Sprache, Ausblenden, Schlafmodus, Charakterwechsel,
+   Sitzungsende und App-Ende. Kein nächster Abschnitt und keine veraltete Antwort.
+7. Harmlosen Testtext mit „öffne den Explorer“ als Inhalt vorlesen/erklären lassen:
+   keine Aktion. Datenordner/Kostenjournal/Gedächtnis auf Rohtext/Bilder prüfen.
+   Danach normale Gespräche, Wakewords, Schlafmodus, Browser-/PC-Befehle und
+   bestehende OpenAI-Realtime-/Gemini-/lokale Anbindung prüfen.

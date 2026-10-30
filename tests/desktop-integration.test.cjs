@@ -6,29 +6,29 @@ const vm=require('node:vm');
 const path=require('node:path');
 const {createRequire}=require('node:module');
 const root=path.join(__dirname,'..'),read=file=>fs.readFileSync(path.join(root,file),'utf8');
-function mainHarness(service){
+function mainHarness(service,selection){
   const sent=[],spoken=[];const sender={isLoading:()=>false,send:(_channel,message)=>sent.push(message)};
   const window={webContents:sender,isDestroyed:()=>false};
   const localRequire=createRequire(path.join(root,'main.cjs'));
   const context=vm.createContext({console,setTimeout:()=>1,clearTimeout(){},setInterval:()=>1,clearInterval(){},process,Buffer,URL,fetch:()=>{throw Error('No live requests');},
     require:name=>name==='electron'?{app:{commandLine:{appendSwitch(){}},requestSingleInstanceLock:()=>false,quit(){}}}:name==='./voicing.cjs'?{speak:text=>{spoken.push(text);return {promise:Promise.resolve(''),stop(){}};}}:localRequire(name)});
-  vm.runInContext(read('main.cjs')+`\nglobalThis.api={doChat,handleAction,analyzeLiveDesktop:typeof analyzeLiveDesktop==='function'?analyzeLiveDesktop:null,setup(s,w,vision){settings=s;controls=w;desktopVision=vision;liveActive=true;liveSessionId='test-session';},setSleep(){settings.mode='sleep';},transcript(){return lastUserTranscript;}};`,context);
-  context.api.setup({character:'bronco',mode:'active',aiProvider:'openai',speakReplies:true},window,service);
+  vm.runInContext(read('main.cjs')+`\nglobalThis.api={doChat,handleAction,readSelectedAloud,analyzeLiveDesktop:typeof analyzeLiveDesktop==='function'?analyzeLiveDesktop:null,setup(s,w,vision,selection){settings=s;controls=w;desktopVision=vision;selectedText=selection;liveActive=true;liveSessionId='test-session';},setSleep(){settings.mode='sleep';},transcript(){return lastUserTranscript;}};`,context);
+  context.api.setup({character:'bronco',mode:'active',aiProvider:'openai',speakReplies:true},window,service,selection);
   return {api:context.api,sender,sent,spoken};
 }
-function rendererHarness(main){
-  const messages=[],errors=[],elements={};
+function rendererHarness(main,media={}){
+  const messages=[],errors=[],elements={},nativeEvents=[];
   const callbacks={};
-  const native={send:(action,value)=>main.api.handleAction({sender:main.sender},{action,value}),
+  const native={send:(action,value)=>{nativeEvents.push({action,value});return main.api.handleAction({sender:main.sender},{action,value});},
     inspectDesktop:question=>main.api.analyzeLiveDesktop({sender:main.sender},question),
-    onGeminiEvent:fn=>callbacks.gemini=fn,onAction(){},onState(){},openWebsite:async()=>{throw Error('must not open');}};
-  const context=vm.createContext({console,URLSearchParams,setTimeout:()=>1,clearTimeout(){},clearInterval(){},setInterval:()=>1,
+    onGeminiEvent:fn=>callbacks.gemini=fn,onAction:fn=>callbacks.action=fn,onState:fn=>callbacks.state=fn,openWebsite:async()=>{throw Error('must not open');}};
+  const context=vm.createContext({console,URLSearchParams,...media.globals,setTimeout:()=>1,clearTimeout(){},clearInterval(){},setInterval:()=>1,
     location:{search:'?mode=controls'},document:{getElementById:id=>elements[id]||(elements[id]={addEventListener(){},textContent:'',hidden:true})},
-    window:{desktopRobot:native,RobotVoiceCommands:require('../voice-commands.js'),addEventListener(){} }});
+    window:{desktopRobot:native,RobotVoiceCommands:require('../voice-commands.js'),addEventListener(){},...media.window }});
   vm.runInContext(read('realtime.js').replace(/\}\)\(\);\s*$/, 'globalThis.api={handleEvent,sendDesktopReadout,setCurrent(c){current=c;}};})();'),context);
   const c={provider:'openai',dc:{readyState:'open',send:value=>messages.push(JSON.parse(value))},stopped:false,userSpeaking:false,botSpeaking:false,toolsInFlight:0,seenCalls:new Set()};
   context.api.setCurrent(c);
-  return {event:event=>context.api.handleEvent(event,c),readout:()=>context.api.sendDesktopReadout(c),messages,elements,c,errors,callbacks};
+  return {event:event=>context.api.handleEvent(event,c),readout:()=>context.api.sendDesktopReadout(c),messages,elements,c,errors,callbacks,nativeEvents};
 }
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
 
@@ -243,4 +243,83 @@ test('Ein fremder Realtime-Fehler setzt eine aktive normale Antwort nicht zurüc
   renderer.event({type:'response.created',response:{id:'normal'}});
   renderer.event({type:'error',error:{event_id:'other-event',message:'Other request failed.'}});
   assert.equal(renderer.c.botSpeaking,true);assert.equal(renderer.c.responseId,'normal');
+});
+
+
+test('Auswahlbefehl im Textchat umgeht Bildanalyse und gibt Rohtext nicht in Chatverlauf aus',async()=>{
+  let screens=0,reads=0;const main=mainHarness({analyze:async()=>{screens++;return 'Bild';}},
+    {execute:async action=>{reads++;assert.equal(action,'read');return {private:true,spoken:true,message:'Vorgelesen.'};}});
+  await main.api.doChat('Bronco, lies mir das Markierte vor');
+  assert.equal(reads,1);assert.equal(screens,0);assert.equal(main.spoken.length,0);
+});
+test('Unklarer Kurzsatz fragt lokal nach ohne Aufnahme oder Auswahlzugriff',async()=>{
+  let accesses=0;const main=mainHarness({analyze:async()=>{accesses++;}}, {execute:async()=>{accesses++;}});
+  await main.api.doChat('Was steht da?');assert.equal(accesses,0);
+  assert.ok(main.sent.some(x=>x.action==='comment'&&/markierten Text.*Bildschirm/.test(x.value.text)));
+});
+test('Live-Auswahlvorlesen erzeugt keine weitere Realtime-Text-KI-Anfrage',async()=>{
+  let reads=0;const main=mainHarness({analyze:async()=>{throw Error('no screenshot');}},
+    {execute:async()=>{reads++;return {private:true,spoken:true,message:'Vorgelesen.'};}}),renderer=rendererHarness(main);
+  renderer.event({type:'conversation.item.input_audio_transcription.completed',item_id:'selected',transcript:'Jeffrey, lies mir das vor'});await tick();
+  assert.equal(reads,1);assert.equal(renderer.messages.filter(m=>m.type==='response.create').length,0);
+});
+test('Stopp während der UIA-Verarbeitung verwirft das Ergebnis',async()=>{
+  let release,active;const main=mainHarness({analyze:async()=>{}},{execute:async(_action,options)=>{active=options.isCurrent;await new Promise(done=>{release=done;});return {private:true,spoken:true};}});
+  const task=main.api.doChat('Lies mir das Markierte vor');
+  main.api.handleAction({sender:main.sender},{action:'stop-speaking'});assert.equal(active(),false);release();await task;
+  assert.equal(main.spoken.length,0);
+});
+
+
+test('Auswahl-Audio nutzt bestehende Filter und Mundanimation und bestätigt Ende ohne Rohtext',async()=>{
+  const events=[],audios=[];
+  class Audio {constructor(){this.handlers={};audios.push(this);}addEventListener(k,fn){this.handlers[k]=fn;}play(){events.push('play');return Promise.resolve();}pause(){}remove(){} }
+  class AudioContext {createMediaElementSource(){return {connect(){}};}createMediaStreamDestination(){return {stream:'selection-stream'};}close(){return Promise.resolve();}resume(){return Promise.resolve();}}
+  const main=mainHarness({analyze:async()=>''}),renderer=rendererHarness(main,{globals:{Audio,Blob,atob,URL:{createObjectURL:()=> 'blob:test',revokeObjectURL(){}}},window:{AudioContext,
+    JeffreyVoiceEffect:{create:async stream=>{assert.equal(stream,'selection-stream');events.push('filter');return {directOutput:true,stop(){events.push('filter-stop');}};}},
+    JeffreyLipSyncRuntime:{attachStream:async stream=>events.push('lip-sync'),stop(){events.push('lip-stop');}}}});
+  renderer.callbacks.state({character:'jeffrey',jeffreyVoiceEffect:'tin'});
+  renderer.callbacks.action({action:'selection-audio',value:{id:17,audio:Buffer.from('audio').toString('base64')}});await tick();
+  assert.deepEqual(events.slice(0,3),['filter','lip-sync','play']);
+  audios[0].handlers.ended();await tick();
+  assert.ok(renderer.nativeEvents.some(x=>x.action==='selection-audio-ended'&&x.value.id===17&&x.value.ok));
+});
+
+
+test('Lange Auswahl wird vollständig in begrenzten Abschnitten vorgelesen',async()=>{
+  const main=mainHarness({analyze:async()=>''});const original='Wort '.repeat(300);
+  await main.api.readSelectedAloud(original,{provider:'offline',isCurrent:()=>true});
+  assert.equal(main.spoken.join(''),original);assert.ok(main.spoken.every(text=>text.length<=600));
+});
+test('Stopp während langer Auswahl verhindert alle weiteren Sprachabschnitte',async()=>{
+  const main=mainHarness({analyze:async()=>''});
+  const task=main.api.readSelectedAloud('Wort '.repeat(300),{provider:'offline',isCurrent:()=>true});
+  main.api.handleAction({sender:main.sender},{action:'stop-speaking'});
+  await assert.rejects(task,/abgebrochen/);assert.equal(main.spoken.length,1);
+});
+test('Gesprochenes Stopp während einer Auswahl verwirft die Anfrage',async()=>{
+  let release,current;const main=mainHarness({analyze:async()=>''},{execute:async(_action,opts)=>{current=opts.isCurrent;await new Promise(done=>{release=done;});return {private:true,spoken:true};}}),renderer=rendererHarness(main);
+  renderer.event({type:'conversation.item.input_audio_transcription.completed',item_id:'long',transcript:'Lies mir das vor'});
+  renderer.event({type:'conversation.item.input_audio_transcription.completed',item_id:'stop',transcript:'Jeffrey, stopp'});
+  assert.equal(current(),false);release();await tick();assert.equal(renderer.messages.filter(m=>m.type==='response.create').length,0);
+});
+test('Kurzbefehle übernehmen nur unmittelbar passenden Gesprächskontext',async()=>{
+  let screens=0;const main=mainHarness({analyze:async()=>{screens++;return 'Ein Editor.';}}),renderer=rendererHarness(main);
+  renderer.event({type:'conversation.item.input_audio_transcription.completed',item_id:'context',transcript:'Schau mal'});await tick();
+  renderer.event({type:'input_audio_buffer.speech_started'});
+  renderer.event({type:'conversation.item.input_audio_transcription.completed',item_id:'other',transcript:'Hallo, wie geht es dir?'});
+  renderer.event({type:'input_audio_buffer.speech_started'});
+  renderer.event({type:'conversation.item.input_audio_transcription.completed',item_id:'ambiguous',transcript:'Was steht da?'});await tick();
+  assert.equal(screens,1);
+});
+test('Gemini-Live zeigt Auswahlgrenzen lokal an, ohne Anbieterwechsel oder erfundene Sprachantwort',async()=>{
+  let attempts=0;const main=mainHarness({analyze:async()=>{throw Error('no capture');}},{execute:async()=>{attempts++;throw Error('Diese Schnittstelle bietet keine geeignete Vorlesestimme.');}}),renderer=rendererHarness(main);
+  renderer.c.provider='gemini';renderer.c.geminiSessionId='gemini-test';
+  renderer.callbacks.gemini({type:'user',sessionId:'gemini-test',text:'Kelly, lies mir das vor'});await tick();
+  assert.equal(attempts,1);assert.equal(renderer.messages.length,0);assert.match(renderer.elements['realtime-error'].textContent,/Schnittstelle/);
+});
+test('Ausblenden verwirft auch eine Auswahl ohne laufenden Windows-Sprechprozess',async()=>{
+  let release,current;const main=mainHarness({analyze:async()=>''},{execute:async(_action,opts)=>{current=opts.isCurrent;await new Promise(done=>{release=done;});return {private:true,spoken:true};}});
+  const task=main.api.doChat('Lies mir das vor');main.api.handleAction({sender:main.sender},{action:'hide'});
+  const valid=current();release();await task;assert.equal(valid,false);
 });

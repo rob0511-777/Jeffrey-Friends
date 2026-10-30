@@ -46,15 +46,28 @@ Der Anbieter bleibt während einer aktiven Sprachsitzung fest. Dadurch entstehen
 
 ### Desktop sehen und verstehen
 
-Alle fünf Charaktere reagieren beispielsweise auf „Schau dir meinen Bildschirm an“,
-„Lies mir diese Fehlermeldung vor“ oder „Was ist das für ein Fenster?“. Nach Zustimmung
-zur Cloud-Übertragung wird auf jeden ausdrücklichen Bildschirmbefehl genau eine
-Aufnahme des primären Windows-Bildschirms mit OpenAI ausgewertet und über die
-vorhandene Sprachausgabe erklärt. In der App bleiben die Bilder nur kurz im
-Arbeitsspeicher; es gibt keine dauerhafte Überwachung oder Computeraktionen.
-Die derzeitigen Gemini-Live- und lokalen Schnittstellen bieten keine Bildanalyse.
-Einrichtung, Datenschutz, Grenzen und manuelle Windows-Prüfschritte stehen in
-[Desktop sehen und verstehen](docs/DESKTOP-ERKENNUNG.md).
+Alle fünf Charaktere verstehen lokale natürliche Bildschirm- und Textbefehle:
+„Schau mal“, „Was ist auf Monitor zwei?“, „Lies mir den markierten Text vor“,
+„Erklär mir das“ und „Fasse das zusammen“. Ein Bildschirmbefehl erfasst einmalig
+möglichst den Monitor des zuletzt aktiven fremden Anwendungsfensters, danach den
+Mausmonitor und als letzte Rückfallebene den Hauptmonitor. Jeffreys eigene Fenster
+werden ignoriert. Links, rechts, Maus und GDI-Monitornummern sind explizit wählbar.
+**Nummern entsprechen `DISPLAYn`; sie können von den Windows-Anzeigeeinstellungen
+abweichen.**
+
+Markierter Text wird auf ausdrücklichen Befehl direkt über Windows UI Automation
+ausgelesen. Vorlesen nutzt die vorhandene Sprachausgabe ohne Text-/Bildanalyse;
+OpenAI behält die ausgewählte Charakterstimme samt Filtern bei. Erklären und
+Zusammenfassen verwenden OpenAI oder das gewählte lokale Textmodell. Vor einer
+Cloud-Übertragung erscheint ein gesonderter Datenschutzdialog. Es gibt keinen
+automatischen Screenshot bei fehlender Auswahl, keine Zwischenablageänderung und
+keine simulierten Eingaben. Unklare Kurzbefehle führen zu einer Rückfrage.
+
+**Implementiert, unter Windows noch manuell zu prüfen:** UI Automation,
+Fokuswechsel, mehrere reale Monitore und gemischte DPI-Skalierung. Gemini Live hat
+hier keinen geeigneten Bild-/Textauswahl-/Vorlesepfad; es gibt keinen automatischen
+kostenpflichtigen Anbieterwechsel. Bedienung, Grenzen, Datenschutz und die
+Windows-Prüfliste stehen in [Desktop sehen und verstehen](docs/DESKTOP-ERKENNUNG.md).
 
 ### Voraussetzungen
 
