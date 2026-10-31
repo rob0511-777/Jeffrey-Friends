@@ -78,3 +78,29 @@ Der bestehende Anbieterwechsel beendet zusätzlich separates Vorlesen über
 Nachweis: 351 Node-Tests und 18 ausführbare PowerShell-/Fake-UIA-Fälle unter Linux.
 Echte Windows-UIA, Windows PowerShell 5.1 und visuelle Windows-Abnahme stehen aus.
 Details: `docs/ai/testing/2026-10-31-feature-desktop-vision-2-uia.md`.
+
+
+## 31.10.2026: genauer Operationsfehler und Zustimmungsabgrenzung
+
+Nachgewiesen: Der Endpoint-Enum-Verweis fehlte um den Namespace-Teil `.Text`.
+Der korrigierte Fake-API-Vertrag führt mit altem Verweis zu 12/18 Fehlern und mit
+alleiniger Namespace-Korrektur zu 18/18 erfolgreichen Fällen. Die Simulation
+enthält den falschen Alias ausdrücklich nicht mehr.
+
+Jede Leseoperation bekommt einen festen Bezeichner, Fehlerklasse und HRESULT.
+Explizite Getter machen Current-/SupportedTextSelection-Ausnahmen catchbar.
+Null-Auswahlen und irrelevante Metadatenfehler überstimmen keinen erfolgreich
+leeren Bereich; bekannte TextPattern-Fehler werden bei fehlender anderer Auswahl
+weiterhin ehrlich gemeldet. `-DiagnosticOnly -DelaySeconds 5` erlaubt lokale
+Windows-Diagnose ohne Textausgabe und ohne Cloudpfad. JavaScript begrenzt neue
+Diagnosefelder auf feste Werte; keine rohen Fehlermeldungen oder Fensterdaten.
+
+Der Zustimmungsablauf wurde nicht verändert: lokale UIA zuerst, erst danach bei
+geeignetem Anbieter/Schlüssel/Budget gegebenenfalls einmalige App-Cloud-Zustimmung.
+Ein UIA-Fehler erreicht den Dialog nicht. Windows-Systemdialoge sind hiervon
+unabhängig und ersetzen die App-Zustimmung nicht. Zusätzliche Tests sichern diese
+Reihenfolge, Prozess-Lebensdauer, Ablehnung und erneuten Versuch ab.
+
+Nachweis: 358 Node-Tests und 31 PowerShell-/Fake-UIA-Fälle unter Linux.
+Reale Windows-11-/PowerShell-5.1-/Editor-Prüfung bleibt offen; Verfahren und
+Grenzen stehen in `docs/ai/testing/2026-10-31-feature-desktop-vision-2-uia-operations.md`.

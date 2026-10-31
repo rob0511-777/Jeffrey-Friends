@@ -5,8 +5,15 @@ const prefix=['-NoLogo','-NoProfile','-NonInteractive','-ExecutionPolicy','Bypas
 const STAGES=new Set(['initialize','target','focus','condition','enumerate','selection','transport']);
 const CODES=new Set(['none','no-selection','no-text-pattern','password-field','no-window','multiple-selections','selection-limit','provider-error','initialization-failed','access-denied','element-unavailable','partial-provider-error','query-limit','process-failed','timeout','invalid-response']);
 const ROUTES=new Set(['none','focus','root','descendants']);
+const OPERATIONS=new Set(['none','load-native','load-uia-types','load-uia-client','target-window','from-handle','current','focused-element','compare-elements','get-parent','property-condition','find-all','try-get-current-pattern','supported-text-selection','get-selection','compare-endpoints','get-text']);
+const FAILURE_KINDS=new Set(['none','unknown','type-not-found','access-denied','invalid-operation','argument','com','element-unavailable','binding']);
 function safeSelectionDiagnostic(value){
-  return {stage:STAGES.has(value?.stage)?value.stage:'selection',code:CODES.has(value?.code)?value.code:'provider-error',route:ROUTES.has(value?.route)?value.route:'none'};
+  const result={stage:STAGES.has(value?.stage)?value.stage:'selection',code:CODES.has(value?.code)?value.code:'provider-error',route:ROUTES.has(value?.route)?value.route:'none'};
+  if(value?.operation!==undefined)result.operation=OPERATIONS.has(value.operation)?value.operation:'none';
+  if(value?.failureKind!==undefined)result.failureKind=FAILURE_KINDS.has(value.failureKind)?value.failureKind:'unknown';
+  if(typeof value?.hresult==='string'&&/^0x[0-9a-f]{8}$/i.test(value.hresult))result.hresult='0x'+value.hresult.slice(2).toUpperCase();
+  if(Number.isInteger(value?.ignoredErrors)&&value.ignoredErrors>=0)result.ignoredErrors=Math.min(99,value.ignoredErrors);
+  return result;
 }
 // Only foreground HWND metadata is observed. No text, titles, pixels or polling.
 function createWindowsDesktop({platform=process.platform,execFileImpl=execFile,spawnImpl=spawn}={}){

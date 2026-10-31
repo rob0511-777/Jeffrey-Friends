@@ -63,3 +63,23 @@ test('Technische UIA-Fehler werden mit sicherem Code statt als nicht unterstütz
   const reply=await service.execute('read');assert.match(reply.message,/Technischer Fehler/);assert.match(reply.message,/initialize\/initialization-failed/);
   assert.doesNotMatch(reply.message,/GEHEIM|keine geeignete Textauswahl/);assert.equal(calls.speak.length,0);assert.equal(calls.fetch.length,0);
 });
+test('Genauer UIA-Aufruf wird ohne Rohfehler in der App-Rückmeldung angezeigt',async()=>{
+  const {service}=fixture({readSelection:async()=>({status:'error',diagnostic:{stage:'selection',code:'provider-error',operation:'compare-endpoints',failureKind:'type-not-found',hresult:'0x80131501',message:'GEHEIM'}})});
+  const reply=await service.execute('read');assert.match(reply.message,/compare-endpoints/);assert.match(reply.message,/type-not-found/);assert.match(reply.message,/0x80131501/);assert.doesNotMatch(reply.message,/GEHEIM/);
+});
+test('UIA-Fehler vor dem Auslesen erreicht die Cloud-Zustimmung und TTS nicht',async()=>{
+  const {service,calls}=fixture({readSelection:async()=>({status:'error',diagnostic:{stage:'selection',code:'provider-error'}})});
+  await service.execute('read');assert.equal(calls.consent.length,0);assert.equal(calls.fetch.length,0);assert.equal(calls.speak.length,0);
+});
+test('Nach UIA-Fehler fragt erst die erste erfolgreiche Auswahl nach Cloud-Zustimmung',async()=>{
+  let ready=false;const {service,calls}=fixture({readSelection:async()=>ready?{status:'ok',text:'Testauswahl'}:{status:'error'}});
+  await service.execute('read');assert.equal(calls.consent.length,0);ready=true;await service.execute('read');assert.deepEqual(calls.consent,['openai']);assert.equal(calls.speak.length,1);
+});
+test('Erteilte Text-Zustimmung bleibt für denselben Dienst erhalten, neuer App-Dienst fragt erneut',async()=>{
+  const first=fixture();await first.service.execute('read');await first.service.execute('read');assert.equal(first.calls.consent.length,1);assert.equal(first.calls.speak.length,2);
+  const restarted=fixture();await restarted.service.execute('read');assert.equal(restarted.calls.consent.length,1);
+});
+test('Abgelehnte Cloud-Zustimmung wird nicht gespeichert oder beim zweiten Versuch umgangen',async()=>{
+  let dialogs=0;const {service,calls}=fixture({requestConsent:async()=>++dialogs>1});
+  await assert.rejects(service.execute('read'),/keine Zustimmung/);assert.equal(calls.speak.length,0);await service.execute('read');assert.equal(dialogs,2);assert.equal(calls.speak.length,1);
+});

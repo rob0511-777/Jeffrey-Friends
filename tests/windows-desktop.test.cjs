@@ -40,3 +40,13 @@ test('UI Automation läuft im MTA-Prozess, Monitor-Metadaten behalten ihren bish
   const args=[];const native=load().createWindowsDesktop({platform:'win32',execFileImpl:(_f,a,_o,cb)=>{args.push(a);cb(null,Buffer.from('{"status":"empty"}'));}});
   await native.readSelection();await native.snapshot();assert.ok(args[0].includes('-Mta'));assert.equal(args[1].includes('-Mta'),false);
 });
+test('UIA-Diagnose bewahrt genaue Operation und sichere Fehlerklasse samt HRESULT',async()=>{
+  const diagnostic={stage:'selection',code:'provider-error',route:'descendants',operation:'get-text',failureKind:'invalid-operation',hresult:'0x80131509',ignoredErrors:2,message:'GEHEIM',runtime:{hostname:'GEHEIM'}};
+  const native=load().createWindowsDesktop({platform:'win32',execFileImpl:(_f,_a,_o,cb)=>cb(null,Buffer.from(JSON.stringify({status:'error',diagnostic})))});
+  const result=await native.readSelection();assert.equal(result.diagnostic.operation,'get-text');assert.equal(result.diagnostic.failureKind,'invalid-operation');assert.equal(result.diagnostic.hresult,'0x80131509');assert.equal(result.diagnostic.ignoredErrors,2);
+  assert.doesNotMatch(JSON.stringify(result),/GEHEIM|hostname/);
+});
+test('Unbekannte Operationen, Fehlertypen und HRESULT-Texte werden verworfen',async()=>{
+  const native=load().createWindowsDesktop({platform:'win32',execFileImpl:(_f,_a,_o,cb)=>cb(null,Buffer.from(JSON.stringify({status:'error',diagnostic:{operation:'GEHEIM',failureKind:'GEHEIM',hresult:'GEHEIM',ignoredErrors:'GEHEIM'}})))});
+  assert.doesNotMatch(JSON.stringify(await native.readSelection()),/GEHEIM/);
+});

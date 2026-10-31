@@ -78,6 +78,12 @@ Die Windows-Textauswahl prüft zuerst das fokussierte Element samt TextPattern-
 Vorfahren im richtigen Fremdfenster, danach sichtbare TextPattern-Elemente.
 Technische Fehler werden getrennt von fehlender Unterstützung gemeldet, mit
 festen UIA-Diagnosecodes ohne Textinhalte, Fenstertitel oder rohe Ausnahmen.
+Ein falscher Namespace beim Vergleich der Auswahl-Endpunkte wurde korrigiert.
+Bei weiteren Fehlern nennt die Rückmeldung jetzt die konkrete Operation.
+[Windows-Diagnose und Zustimmungsablauf](docs/ai/testing/2026-10-31-feature-desktop-vision-2-uia-operations.md)
+beschreibt einen lokalen Diagnoseaufruf, der keinen ausgewählten Text ausgibt.
+Die Cloud-Zustimmung erscheint erst nach erfolgreichem lokalen Auslesen;
+bei einem UIA-Fehler wird keine Cloud-Übertragung vorbereitet.
 
 **Implementiert, unter Windows noch manuell zu prüfen:** UI Automation,
 Fokuswechsel, mehrere reale Monitore und gemischte DPI-Skalierung. Gemini Live hat

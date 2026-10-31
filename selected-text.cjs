@@ -24,7 +24,11 @@ function createSelectedText({getProvider,getKey,isAllowed,checkBudget,readSelect
         let message=messages[selected?.status]||messages.error;
         if(selected?.status==='error'){
           const diagnostic=safeSelectionDiagnostic(selected.diagnostic);
-          message+=` UIA-Diagnose: ${diagnostic.stage}/${diagnostic.code}. Bitte die Anwendung und Berechtigungen prüfen.`;
+          message+=` UIA-Diagnose: ${diagnostic.stage}/${diagnostic.code}.`;
+          if(diagnostic.operation&&diagnostic.operation!=='none')message+=` Operation: ${diagnostic.operation}.`;
+          if(diagnostic.failureKind&&diagnostic.failureKind!=='none')message+=` Fehlerklasse: ${diagnostic.failureKind}.`;
+          if(diagnostic.hresult)message+=` HRESULT: ${diagnostic.hresult}.`;
+          message+=' Bitte mit dem Diagnoseverfahren prüfen.';
         }
         return {private:true,message};
       }

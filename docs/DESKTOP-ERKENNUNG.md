@@ -87,9 +87,16 @@ Erlaubnis. Es gibt keine Cloudanfrage zur Befehlsinterpretation.
 Der bisherige äußere PowerShell-`catch` meldete sämtliche technischen Ausnahmen
 als `unsupported`. Dadurch konnte ein Initialisierungs-, Condition-, Fenster- oder
 Providerfehler die irreführende Meldung „keine geeignete Textauswahl“ erzeugen.
-Die ursprüngliche konkrete Windows-Ausnahme lässt sich aus dieser alten Meldung
-nicht rekonstruieren; ein tatsächlicher Fehler im Windows-`PropertyCondition`-
-Konstruktor wurde in der Linux-Umgebung nicht nachgewiesen.
+Bei der weiteren Prüfung wurde ein konkreter Vertragsfehler nachgewiesen:
+`TextPatternRangeEndpoint` stand im falschen Namespace. Für `CompareEndpoints`
+muss `System.Windows.Automation.Text.TextPatternRangeEndpoint` verwendet werden.
+Sobald `GetSelection` mindestens einen Bereich liefert (auch ein Caret), scheitert
+der alte Typverweis und wurde als `selection/provider-error` zusammengefasst.
+Die frühere Simulation hatte denselben falschen Namespace nachgebildet; der
+Testvertrag ist nun berichtigt und prüft, dass dieser falsche Typ nicht existiert.
+Ein tatsächlicher Fehler im Windows-`PropertyCondition`-Konstruktor wird weiterhin
+nicht als Ursache behauptet. Zusätzliche native Providerfehler bleiben möglich
+und können mit der unten verlinkten Diagnose getrennt untersucht werden.
 
 Der korrigierte Leseprozess verwendet einen eigenen MTA-PowerShell-Aufruf, lädt
 UIAutomationTypes/Client ausdrücklich und erzeugt `PropertyCondition` über den
@@ -108,8 +115,9 @@ verschiedene zugängliche Auswahlen bleiben ohne eindeutigen Fokus mehrdeutig.
 Ein Caret ohne Textmarkierung ist weiterhin keine Auswahl. Es gibt kein Strg+C,
 keine Zwischenablage, keine simulierten Eingaben und keinen Ersatz-Screenshot.
 
-Diagnostik enthält ausschließlich feste Werte für **Schritt**, **Code** und
-**Suchweg**. Zum Beispiel:
+Diagnostik enthält feste Werte für **Schritt**, **Code**, **Suchweg** und die
+konkrete **Operation** sowie eine begrenzte Fehlerklasse und numerisches HRESULT.
+Ungeprüfte Exception-Texte werden nicht ausgegeben. Zum Beispiel:
 
 - `initialize/initialization-failed`: technische UIA-Initialisierung fehlgeschlagen.
 - `condition/provider-error`: Condition-Erzeugung technisch fehlgeschlagen.
@@ -132,6 +140,48 @@ Elemente, Grenzen und Diagnose. **Echter Windows-Editor und Browser unter Window
 stellt geeignete UIA-Schnittstellen bereit; Unterstützung wird nicht erfunden.
 Die ursprüngliche Fehlermeldung ist deshalb kein Beleg dafür, dass Windows-Editor
 oder ein bestimmter Browser prinzipiell ungeeignet wäre.
+
+### Operationen und datensparsame Windows-Diagnose
+
+`Current`, `TryGetCurrentPattern`, `SupportedTextSelection`, `GetSelection`,
+`CompareEndpoints` und `GetText` werden einzeln zugeordnet. Explizite .NET-
+Getter lassen Provider-Ausnahmen auffallen, statt dass die PowerShell-
+Property-Anpassung still einen Nullwert einsetzt. `GetSelection` darf laut
+UIA-Vertrag auch `null` liefern, wenn kein Caret vorhanden ist; das wird jetzt
+als fehlende Auswahl behandelt. Fehler irrelevanter Metadatenelemente überstimmen
+keinen erfolgreich auf leer geprüften Textbereich. Ein Fehler auf einem bekannten
+TextPattern bleibt dagegen sichtbar, wenn keine andere Auswahl lesbar ist.
+Die Diagnose bevorzugt in diesem Fall die tatsächliche TextPattern-Operation
+gegenüber einem vorangehenden Metadatenfehler.
+
+Für Windows PowerShell 5.1 und Editor ist weiterhin ein echter Windows-Test
+notwendig. Das vorbereitete Verfahren startet denselben MTA-PowerShell-Leseweg,
+gibt aber dank `-DiagnosticOnly` **keinen ausgewählten Text** aus und überträgt
+nichts an eine KI. Nach einer kurzen Verzögerung wird das dann aktive Fenster
+untersucht. Ablauf und genauer Befehl:
+[Windows-Diagnose mit Operationsnachweis](ai/testing/2026-10-31-feature-desktop-vision-2-uia-operations.md).
+
+### Warum die Genehmigungsanfrage bei einem UIA-Fehler fehlt
+
+Die anwendungseigene Zustimmung **„Textauswahl übertragen?“** wird erst nach
+erfolgreichem lokalem Auslesen einer nicht leeren Auswahl und vor der ersten
+OpenAI-Übertragung verlangt. Bei `selection/provider-error` kehrt der Lesepfad
+vorher zurück: **kein Dialog, keine Übertragung, keine gespeicherte neue Zustimmung**.
+Das Ausbleiben dieses Dialogs ist in diesem Fehlerfall erwartetes Verhalten.
+Nach erfolgreicher Reparatur erscheint er, sofern im aktuellen App-Prozess noch
+keine entsprechende Zustimmung erteilt wurde. Zustimmung und Ablehnung werden
+weder durch einen Windows-Dialog ersetzt noch automatisch angenommen. Eine bereits
+erteilte Text-Zustimmung gilt weiterhin bis zum vollständigen App-Ende; die
+Bildschirm-Zustimmung ist davon getrennt. Lokale Verarbeitung benötigt keine
+Cloud-Zustimmung, fehlender Schlüssel oder Budgetblockade kann vorher abbrechen.
+
+Eine Windows-Systemmeldung (z. B. UAC, SmartScreen oder Mikrofonzugriff) ist ein
+anderer Vorgang. Der UIA-Lesecode fordert keinen solchen Dialog an und versucht
+keine automatische Rechteerhöhung. Welche frühere Meldung gemeint war, ist ohne
+ihre Bezeichnung nicht feststellbar. Nicht allein wegen fehlender Dialoge erhöhte
+Rechte starten; der lokale Diagnosecode hilft, Typfehler von Zugriffsfehlern zu
+unterscheiden. Das lokale Diagnoseverfahren selbst hat keinen Cloudpfad und zeigt
+deshalb keinen App-Cloud-Dialog.
 
 ## Anbieter, Sprache, Kosten und Datenschutz
 
