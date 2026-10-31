@@ -1,3 +1,4 @@
+# Keep source ASCII for Windows PowerShell 5.1; command phrases arrive as UTF-8 JSON.
 $ErrorActionPreference='Stop'
 [Console]::InputEncoding=[System.Text.UTF8Encoding]::new($false)
 [Console]::OutputEncoding=[System.Text.UTF8Encoding]::new($false)
@@ -30,7 +31,7 @@ try {
         $event=Wait-Event -SourceIdentifier 'MouseGridSpeech' -Timeout 1
         if ($null -eq $event) { continue }
         $result=$event.SourceEventArgs.Result
-        $stop=$result.Text -match '^(?:(?:Jeffrey|Jeffry|Jeffri|Bronco|Bronko|Kelly|Kelli|Krak|Krack|James|Dscheims) )?(?:bitte )?(?:Stopp?|Stoppen|Maus stoppen|Maus anhalten|Hör auf|Brich ab|Abbrechen)$'
+        $stop=$result.Text -match '^(?:(?:Jeffrey|Jeffry|Jeffri|Bronco|Bronko|Kelly|Kelli|Krak|Krack|James|Dscheims) )?(?:bitte )?(?:Stopp?|Stoppen|Maus stoppen|Maus anhalten|H\u00f6r auf|Brich ab|Abbrechen)$'
         if ($result.Confidence -ge 0.65 -or ($stop -and $result.Confidence -ge 0.45)) {
             [Console]::Out.WriteLine('TEXT|'+[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($result.Text)))
             [Console]::Out.Flush()

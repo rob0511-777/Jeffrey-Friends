@@ -39,7 +39,7 @@ KI-Mauswerkzeuge, neuen Abhängigkeiten, Zwischenablage- oder Klickfunktionen.
 node --test --test-isolation=none tests/*.test.cjs
 ```
 
-**433 Tests bestanden, 0 Fehler, Exit 0.** Die Isolation wurde wegen der
+**434 Tests bestanden, 0 Fehler, Exit 0.** Die Isolation wurde wegen der
 Linux-Sandbox gewählt; `npm test` verwendet auf einem normalen Windows-System
 weiterhin den vorhandenen Testbefehl. Der Basisstand enthielt 358 Node-Tests.
 
@@ -53,6 +53,9 @@ Nachweise umfassen:
 - Alle fünf Namen, B/C/D und Buchstabieralternativen, Monitorwahl, Sichtbarkeit
   einschließlich 0 %, Ablehnung von Negationen, Zitaten, Zusatzaktionen und Klicks.
   Alle **2.137** geschlossenen Grammatikphrasen passieren denselben Parser.
+  Der neue PowerShell-Helfer bleibt ASCII; Unicode-Ausdrücke im Stopp-Regex
+  verwenden Escapes. Damit verfälscht das ANSI-Quellencoding von Windows PowerShell
+  5.1 den Ausdruck „Hör auf“ nicht. Grammatikphrasen kommen als UTF-8-JSON.
 - Native Prozessadapter mit Fake-Streams: nur letztes Startziel wird gesendet,
   STOP verwirft Warteschlange, Ersetzen, Zielprüfung, Prozessende und Verwerfen
   verspäteter „Ziel erreicht“-Meldungen nach neuem Ziel oder Stopp.
