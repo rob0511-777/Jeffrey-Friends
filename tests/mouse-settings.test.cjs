@@ -1,0 +1,5 @@
+'use strict';
+const test=require('node:test'),assert=require('node:assert/strict');const {normalizeSettings}=require('../settings.cjs');
+test('Rasterwerte haben sichtbare sichere Vorgaben und speichern Null-Prozent',()=>{const d=normalizeSettings();assert.equal(d.mouseGridOpacity,100);assert.equal(d.mouseGridMaxDepth,4);assert.equal(d.mouseSpeed,900);assert.equal(normalizeSettings({mouseGridOpacity:0}).mouseGridOpacity,0);});
+test('Ungültige Werte werden begrenzt; historische Zustimmung wird nicht erweitert',()=>{const s=normalizeSettings({mouseGridMaxDepth:999,mouseSpeed:-5,privacyConsents:{screen:true,text:true}});assert.equal(s.mouseGridMaxDepth,8);assert.equal(s.mouseSpeed,200);assert.deepEqual(s.privacyConsents,{version:1,screen:{},text:{}});});
+test('Nur versions- und empfängergebundene getrennte Freigaben werden gespeichert',()=>{const s=normalizeSettings({privacyConsents:{version:1,screen:{openai:true,gemini:true},text:{}}});assert.equal(s.privacyConsents.screen.openai,true);assert.equal(s.privacyConsents.screen.gemini,undefined);assert.equal(s.privacyConsents.text.openai,undefined);});

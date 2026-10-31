@@ -175,3 +175,5 @@ body[data-mode=overlay] #robot .speech, body[data-mode=overlay] #robot .transmis
 @media(prefers-reduced-motion:reduce) {
   #robot .portrait-james .portrait-jaw {transform:none!important;transition:none!important;}
 }
+
+.mouse-panel{border:1px solid #42606b;border-radius:10px;padding:12px;margin:16px 0;background:#10202b}.mouse-panel .section-title{margin-top:0}.mouse-stop{width:100%;min-height:48px;margin:8px 0;background:#712e42;color:#fff;border:2px solid #ffabbc;border-radius:7px;font-size:18px;font-weight:800}.mouse-stop:focus-visible{outline:3px solid #fff;outline-offset:2px}.mouse-panel input[type=range]{width:100%}.mouse-panel summary,.privacy-panel summary{cursor:pointer;color:#b8e5e7}.mouse-panel output{float:right}.privacy-panel{border:1px solid #42606b;border-radius:7px;padding:10px;margin:12px 0}

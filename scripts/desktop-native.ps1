@@ -8,7 +8,13 @@ using System.Text;
 public static class DesktopNative {
     [DllImport("user32.dll")] static extern bool SetProcessDpiAwarenessContext(IntPtr context);
     [DllImport("user32.dll")] static extern bool SetProcessDPIAware();
-    public static void EnableDpi() { try { SetProcessDpiAwarenessContext(new IntPtr(-4)); } catch { SetProcessDPIAware(); } }
+    [DllImport("user32.dll")] static extern IntPtr SetThreadDpiAwarenessContext(IntPtr context);
+    public static void EnableDpi() {
+        try { SetProcessDpiAwarenessContext(new IntPtr(-4)); } catch { SetProcessDPIAware(); }
+        // Windows PowerShell may already have a process DPI context. Set this
+        // thread explicitly before reading Screen.Bounds on mixed-DPI desktops.
+        try { SetThreadDpiAwarenessContext(new IntPtr(-4)); } catch { }
+    }
     [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] public static extern bool IsWindow(IntPtr h);
     [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr h);

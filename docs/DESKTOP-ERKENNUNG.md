@@ -163,16 +163,17 @@ untersucht. Ablauf und genauer Befehl:
 
 ### Warum die Genehmigungsanfrage bei einem UIA-Fehler fehlt
 
-Die anwendungseigene Zustimmung **„Textauswahl übertragen?“** wird erst nach
+Die anwendungseigene Zustimmung zur **Textübertragung an OpenAI** wird erst nach
 erfolgreichem lokalem Auslesen einer nicht leeren Auswahl und vor der ersten
 OpenAI-Übertragung verlangt. Bei `selection/provider-error` kehrt der Lesepfad
 vorher zurück: **kein Dialog, keine Übertragung, keine gespeicherte neue Zustimmung**.
 Das Ausbleiben dieses Dialogs ist in diesem Fehlerfall erwartetes Verhalten.
-Nach erfolgreicher Reparatur erscheint er, sofern im aktuellen App-Prozess noch
-keine entsprechende Zustimmung erteilt wurde. Zustimmung und Ablehnung werden
-weder durch einen Windows-Dialog ersetzt noch automatisch angenommen. Eine bereits
-erteilte Text-Zustimmung gilt weiterhin bis zum vollständigen App-Ende; die
-Bildschirm-Zustimmung ist davon getrennt. Lokale Verarbeitung benötigt keine
+Nach erfolgreichem Auslesen erscheint er, sofern keine dauerhafte Text-Freigabe
+für OpenAI gespeichert ist. „Einmal erlauben“ gilt nur für diese Anfrage; die nächste
+fragt erneut. „Auf diesem Gerät dauerhaft erlauben“ überlebt App-Neustarts und ist
+unter KI-ANBIETER & KOSTEN → Datenschutz widerrufbar. Bildschirm-Freigabe ist davon
+getrennt. Zustimmung und Ablehnung werden weder durch einen Windows-Dialog ersetzt
+noch automatisch angenommen. Lokale Verarbeitung benötigt keine
 Cloud-Zustimmung, fehlender Schlüssel oder Budgetblockade kann vorher abbrechen.
 
 Eine Windows-Systemmeldung (z. B. UAC, SmartScreen oder Mikrofonzugriff) ist ein
@@ -205,11 +206,16 @@ Lokal/Offline bleibt die bisherige Windows-Sprachausgabe. Die Vorleseaufforderun
 selbst gilt auch bei ausgeschaltetem „Antworten vorlesen“. Diese Einstellung gilt
 weiterhin für allgemeine Antworten sowie Erklärungen im Textchat.
 
-Die erste Bildübertragung pro App-Start benötigt die bestehende Bild-Zustimmung.
-Textauswahl benötigt eine **gesonderte** lokale Zustimmung vor der ersten
-OpenAI-Übertragung für TTS, Erklärung oder Zusammenfassung. Beide Dialoge erklären
-Kosten und vertrauliche Inhalte; Abbrechen ist Standard. Zustimmung gilt nur bis
-zum vollständigen Beenden der App. Lokale Auswahlverarbeitung verlangt keine
+Bild und markierter Text benötigen **getrennte, an OpenAI gebundene** Zustimmungen
+vor der jeweiligen Übertragung. Der App-Dialog erklärt Empfänger, Datenart,
+API-Kosten und die Wahl zwischen „Abbrechen“, „Einmal erlauben“ und „Auf diesem Gerät
+dauerhaft erlauben“. Abbrechen ist Standard. Einmal gilt für genau eine Anfrage;
+dauerhaft überlebt Sitzungen und App-Neustart und ist in den Einstellungen widerrufbar.
+Die App speichert nur den Freigabestatus je Datenart/Empfänger mit Schema-Version 1
+im lokalen Einstellungsprofil. Alte Prozessfreigaben werden nicht migriert.
+Ein Widerruf bricht laufende Desktop-/Textverarbeitung ab; bereits übertragene Daten
+können dadurch nicht zurückgeholt werden. Erforderliche Freigaben werden für jeden
+Auftrag vor der Übertragung geprüft. Andere Anbieter erben keine OpenAI-Freigabe. Lokale Auswahlverarbeitung verlangt keine
 Cloudzustimmung. Bei Ablehnung oder Budgetblockade keine entsprechende Übertragung.
 
 Die Auswahl gelangt nicht in Gedächtnis oder dauerhafte Logs. Direkt vorgelesener
@@ -260,13 +266,13 @@ Abbrüche werden über IPC als Abbruch bestätigt und nicht als Fehler-Sprachant
 oder Electron-Handlerfehler weitergereicht. Verspätete Sprachantworten nach Stopp
 werden verworfen; derselbe Antwort-Abbruch wird nicht mehrfach gesendet.
 
-Die bestehende Bild-Zustimmung bleibt im einmal pro App-Prozess angelegten
-Analyse-Dienst erhalten. Drei wiederholte Sitzungsenden über den tatsächlichen
-45.000-ms-Idle-Callback mit anschließend derselben Bildschirmfrage benötigen im
-Test nur einen Dialog. Ein neu angelegter App-/Dienstzustand benötigt wieder
-Zustimmung. Es wurde keine Zustimmung auf Datenträger gespeichert und keine
-sitzungsübergreifende Aufnahmeerlaubnis eingeführt: jede Aufnahme braucht weiterhin
-einen neuen ausdrücklichen Bildschirmbefehl.
+Seit der darauf aufbauenden Maussteuerung gibt es keine prozessweite „einmalige“
+Freigabe mehr. Jede Anfrage prüft den gemeinsamen Zustimmungsdienst: „Einmal“ fragt
+bei der nächsten Anfrage erneut, „dauerhaft“ erlaubt weitere ausdrückliche Anfragen
+auch nach 45-Sekunden-Disconnect und App-Neustart. Getrennte Widerrufe bleiben
+wirksam. Die aktualisierten Tests prüfen beide Fälle. Es gibt weiterhin keine
+sitzungsübergreifende Aufnahmeerlaubnis ohne neuen ausdrücklichen Bildschirmbefehl.
+Details: [Maussteuerung und dauerhafte Zustimmungen](MAUSSTEUERUNG.md).
 
 Status zeigt die tatsächlichen Schritte: Zielmonitor ermitteln, gegebenenfalls
 Zustimmung abwarten, Monitor aufnehmen, Übertragung starten, Antwort auswerten,
@@ -280,9 +286,10 @@ Die Korrektur ist automatisiert geprüft; eine erneute reale Windows-Prüfung st
 aus. Insbesondere während Datenschutzdialog, Aufnahme, Netzwerk und Sprachausgabe
 Hintergrundgeräusche/zusätzliche Sprache erzeugen und danach normal weiterfragen;
 anschließend Stopp und alle übrigen Abbruchwege prüfen. Nach mindestens drei echten
-45-Sekunden-Disconnects denselben Bildschirmbefehl erneut sagen: ein Dialog pro
-App-Start, genau eine Aufnahme pro neuem Befehl. Nach vollständigem App-Neustart
-muss die Zustimmung erneut erscheinen. Dabei alle fünf Charaktere und die
+45-Sekunden-Disconnects denselben Bildschirmbefehl erneut sagen: bei „Einmal“
+jeweils neuer Dialog, bei „dauerhaft“ keiner; genau eine Aufnahme pro neuem Befehl.
+Nach vollständigem App-Neustart muss nur ohne passende dauerhafte Freigabe erneut
+gefragt werden. Widerruf und getrennte Text-/Bildfreigaben prüfen. Dabei alle fünf Charaktere und die
 bestehenden OpenAI-/Gemini-/lokalen Gesprächswege prüfen.
 
 ## Automatisierte Prüfung

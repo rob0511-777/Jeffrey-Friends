@@ -79,10 +79,10 @@ test('Kein ausdrücklicher Befehl bedeutet keine Einwilligungsabfrage und keine 
   assert.equal(f.calls.capture,0);assert.equal(f.calls.consent,0);
 });
 
-test('Einwilligung gilt im Prozess, jede weitere Aufnahme benötigt einen neuen Befehl',async()=>{
+test('Einmalige Einwilligung gilt nur für den konkreten Aufnahmeauftrag',async()=>{
   const f=fixture({capture:async()=>{f.calls.capture++;return Buffer.from([255,216,255,1,255,217]);}}),service=f.service();
   await service.analyze(question);await service.analyze('James, schau mal');
-  assert.equal(f.calls.consent,1);assert.equal(f.calls.capture,2);assert.equal(f.calls.fetch,2);
+  assert.equal(f.calls.consent,2);assert.equal(f.calls.capture,2);assert.equal(f.calls.fetch,2);
 });
 
 test('Gleichzeitige Aufträge erzeugen keine zusätzlichen Screenshots oder Dialoge',async()=>{

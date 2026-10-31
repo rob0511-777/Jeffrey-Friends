@@ -69,3 +69,18 @@ OpenAI-Quellen:
 ## Validierungsstand
 
 Alle automatischen Provider-Tests arbeiten mit simulierten Antworten. Es wurden keine echten oder kostenpflichtigen OpenAI-/Gemini-Tests ausgeführt. Vor einer Veröffentlichung sind freiwillige manuelle Audio-Smoke-Tests mit eigenen Schlüsseln empfehlenswert.
+
+## Koordinatenmodus und Datenschutzfreigaben
+
+Der neue Windows-Koordinatenmodus pausiert Live und dessen Codewort-Start, während
+ein deutscher System.Speech-Erkenner lokal feste Rasterbefehle verarbeitet.
+Keine KI-Mauswerkzeuge, zusätzlichen Sprachdienste oder API-Kosten für diese
+Rasterbefehle. Beim Beenden kehrt die bisherige Wakeword-Erkennung zurück;
+normale Live-Sitzungen behalten ihre 45-Sekunden-Kostenbegrenzung.
+Gemini hat im bestehenden Kompatibilitätsmodus keine Nutzertranskripte; zum
+Rasterstart Oberfläche, Textfeld oder einmaliges Windows-Zuhören verwenden.
+
+Bildschirm- und Textfreigabe können nun getrennt für OpenAI dauerhaft im lokalen
+App-Profil gespeichert und im Datenschutzbereich widerrufen werden. „Einmal“ gilt
+für genau eine Anfrage. Ein anderer Empfänger erbt diese Freigaben nicht.
+[Bedienung und Windows-Prüfliste](MAUSSTEUERUNG.md).

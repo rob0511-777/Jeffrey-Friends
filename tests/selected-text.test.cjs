@@ -75,8 +75,8 @@ test('Nach UIA-Fehler fragt erst die erste erfolgreiche Auswahl nach Cloud-Zusti
   let ready=false;const {service,calls}=fixture({readSelection:async()=>ready?{status:'ok',text:'Testauswahl'}:{status:'error'}});
   await service.execute('read');assert.equal(calls.consent.length,0);ready=true;await service.execute('read');assert.deepEqual(calls.consent,['openai']);assert.equal(calls.speak.length,1);
 });
-test('Erteilte Text-Zustimmung bleibt für denselben Dienst erhalten, neuer App-Dienst fragt erneut',async()=>{
-  const first=fixture();await first.service.execute('read');await first.service.execute('read');assert.equal(first.calls.consent.length,1);assert.equal(first.calls.speak.length,2);
+test('Einmalige Text-Zustimmung muss pro Auftrag erneut angefragt werden',async()=>{
+  const first=fixture();await first.service.execute('read');await first.service.execute('read');assert.equal(first.calls.consent.length,2);assert.equal(first.calls.speak.length,2);
   const restarted=fixture();await restarted.service.execute('read');assert.equal(restarted.calls.consent.length,1);
 });
 test('Abgelehnte Cloud-Zustimmung wird nicht gespeichert oder beim zweiten Versuch umgangen',async()=>{

@@ -4,6 +4,12 @@ Branch `feature/desktop-vision-2`, PR #4, Ausgangsstand `195d073`.
 Linux-Ausführung am 31.10.2026: Node v24.19.0, portable PowerShell 7.4.7.
 **Keine native Windows-Ausführung und kein echter Editor-/Browser-Test.**
 
+> Historischer Nachweis für PR #4. Der darauf aufbauende Branch
+> `feature/mouse-grid-consent` ändert die Auswahlmöglichkeiten der App-Zustimmung:
+> „Einmal“ gilt je Anfrage, „dauerhaft“ überlebt Neustarts und ist widerrufbar.
+> Aktueller Ablauf: [Maussteuerung und Zustimmungen](../../MAUSSTEUERUNG.md).
+> UIA-Reihenfolge, Windows-Systemberechtigungen und Diagnoseverfahren bleiben erhalten.
+
 ## Nachgewiesene Ursache
 
 Im bisherigen `CompareEndpoints`-Aufruf wurde
