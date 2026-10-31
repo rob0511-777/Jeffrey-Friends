@@ -4,11 +4,12 @@ function canUseOpenAICommentVoice(settings, hasKey, usedToday, lastAt, now=Date.
   const s=normalizeSettings(settings);
   return s.mode==='active'&&s.comments&&s.commentVoice==='openai'&&hasKey&&usedToday<4&&now-lastAt>=15*60*1000;
 }
-async function synthesizeComment(text,apiKey,preferences={},fetcher=fetch) {
+async function synthesizeComment(text,apiKey,preferences={},fetcher=fetch,options={}) {
   const s=normalizeSettings(preferences);
   if(typeof apiKey!=='string'||!apiKey.trim())throw new Error('Für OpenAI-Kommentare muss ein API-Schlüssel hinterlegt sein.');
-  if(typeof text!=='string'||text.length<3||text.length>220)throw new Error('Ungültiger Kommentar.');
-  const abort=new AbortController(), timeout=setTimeout(()=>abort.abort(),15000);
+  if(typeof text!=='string'||text.length<(options.selection?1:3)||text.length>(options.selection?600:220))throw new Error('Ungültiger Kommentar.');
+  if(options.isCurrent&&!options.isCurrent())throw new Error('Sprachausgabe abgebrochen.');
+  const abort=new AbortController(), watch=options.isCurrent?setInterval(()=>{if(!options.isCurrent())abort.abort();},100):null, timeout=setTimeout(()=>abort.abort(),15000);
   try {
     const result=await fetcher('https://api.openai.com/v1/audio/speech',{
       method:'POST',signal:abort.signal,headers:{authorization:`Bearer ${apiKey}`,'content-type':'application/json'},
@@ -19,6 +20,9 @@ async function synthesizeComment(text,apiKey,preferences={},fetcher=fetch) {
     const data=Buffer.from(await result.arrayBuffer());
     if(!data.length||data.length>2000000)throw new Error('Sprachdatei hat eine unerwartete Größe.');
     return data.toString('base64');
-  }finally{clearTimeout(timeout);}
+  }finally{clearTimeout(timeout);clearInterval(watch);}
 }
-module.exports={canUseOpenAICommentVoice,synthesizeComment};
+function synthesizeSelection(text,key,settings,fetcher=fetch,options={}) {
+  return synthesizeComment(text,key,settings,fetcher,{...options,selection:true});
+}
+module.exports={canUseOpenAICommentVoice,synthesizeComment,synthesizeSelection};

@@ -44,17 +44,52 @@ Kelly und Krak besitzen ein lokales, audio-synchronisiertes 2D-Viseme-Rig. Die M
 
 Der Anbieter bleibt während einer aktiven Sprachsitzung fest. Dadurch entstehen keine parallelen Mehrfachanfragen und kein hörbarer Anbieterwechsel mitten im Gespräch.
 
+Der vorhandene **KI-Modus** steht direkt unter dem gesamten Kasten
+**DIREKT SPRECHEN**. Anbieter, gespeicherte Auswahl und Optionen bleiben gleich;
+API-Schlüssel, Kosten und weitere Einstellungen stehen weiterhin unter
+**KI-ANBIETER & KOSTEN**. Ein Wechsel beendet laufende Sprachverbindungen und
+separates Vorlesen, bevor der neue Modus verwendet wird.
+
 ### Desktop sehen und verstehen
 
-Alle fünf Charaktere reagieren beispielsweise auf „Schau dir meinen Bildschirm an“,
-„Lies mir diese Fehlermeldung vor“ oder „Was ist das für ein Fenster?“. Nach Zustimmung
-zur Cloud-Übertragung wird auf jeden ausdrücklichen Bildschirmbefehl genau eine
-Aufnahme des primären Windows-Bildschirms mit OpenAI ausgewertet und über die
-vorhandene Sprachausgabe erklärt. In der App bleiben die Bilder nur kurz im
-Arbeitsspeicher; es gibt keine dauerhafte Überwachung oder Computeraktionen.
-Die derzeitigen Gemini-Live- und lokalen Schnittstellen bieten keine Bildanalyse.
-Einrichtung, Datenschutz, Grenzen und manuelle Windows-Prüfschritte stehen in
-[Desktop sehen und verstehen](docs/DESKTOP-ERKENNUNG.md).
+Alle fünf Charaktere verstehen lokale natürliche Bildschirm- und Textbefehle:
+„Schau mal“, „Was ist auf Monitor zwei?“, „Lies mir den markierten Text vor“,
+„Erklär mir das“ und „Fasse das zusammen“. Ein Bildschirmbefehl erfasst einmalig
+möglichst den Monitor des zuletzt aktiven fremden Anwendungsfensters, danach den
+Mausmonitor und als letzte Rückfallebene den Hauptmonitor. Jeffreys eigene Fenster
+werden ignoriert. Links, rechts, Maus und GDI-Monitornummern sind explizit wählbar.
+**Nummern entsprechen `DISPLAYn`; sie können von den Windows-Anzeigeeinstellungen
+abweichen.**
+
+Markierter Text wird auf ausdrücklichen Befehl direkt über Windows UI Automation
+ausgelesen. Vorlesen nutzt die vorhandene Sprachausgabe ohne Text-/Bildanalyse;
+OpenAI behält die ausgewählte Charakterstimme samt Filtern bei. Erklären und
+Zusammenfassen verwenden OpenAI oder das gewählte lokale Textmodell. Vor einer
+Cloud-Übertragung erscheint ein gesonderter Datenschutzdialog. Es gibt keinen
+automatischen Screenshot bei fehlender Auswahl, keine Zwischenablageänderung und
+keine simulierten Eingaben. Unklare Kurzbefehle führen zu einer Rückfrage.
+
+Laufende Desktop-Anfragen bleiben bei zusätzlichen Spracherkennungsereignissen
+freigegeben. Abbrechen erfolgt ausdrücklich über „Stopp“, Schlafmodus,
+Ausblenden, Sitzungsende oder Charakterwechsel. Die einmalige Bild-Zustimmung
+gilt bis zum vollständigen App-Ende, auch nach dem 45-Sekunden-Idle-Disconnect.
+
+Die Windows-Textauswahl prüft zuerst das fokussierte Element samt TextPattern-
+Vorfahren im richtigen Fremdfenster, danach sichtbare TextPattern-Elemente.
+Technische Fehler werden getrennt von fehlender Unterstützung gemeldet, mit
+festen UIA-Diagnosecodes ohne Textinhalte, Fenstertitel oder rohe Ausnahmen.
+Ein falscher Namespace beim Vergleich der Auswahl-Endpunkte wurde korrigiert.
+Bei weiteren Fehlern nennt die Rückmeldung jetzt die konkrete Operation.
+[Windows-Diagnose und Zustimmungsablauf](docs/ai/testing/2026-10-31-feature-desktop-vision-2-uia-operations.md)
+beschreibt einen lokalen Diagnoseaufruf, der keinen ausgewählten Text ausgibt.
+Die Cloud-Zustimmung erscheint erst nach erfolgreichem lokalen Auslesen;
+bei einem UIA-Fehler wird keine Cloud-Übertragung vorbereitet.
+
+**Implementiert, unter Windows noch manuell zu prüfen:** UI Automation,
+Fokuswechsel, mehrere reale Monitore und gemischte DPI-Skalierung. Gemini Live hat
+hier keinen geeigneten Bild-/Textauswahl-/Vorlesepfad; es gibt keinen automatischen
+kostenpflichtigen Anbieterwechsel. Bedienung, Grenzen, Datenschutz und die
+Windows-Prüfliste stehen in [Desktop sehen und verstehen](docs/DESKTOP-ERKENNUNG.md).
 
 ### Voraussetzungen
 

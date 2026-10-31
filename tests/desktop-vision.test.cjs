@@ -22,7 +22,7 @@ test('Explizite Desktop-Befehle funktionieren unabhängig von allen fünf Charak
   for(const name of ['Jeffrey','Kelly','Krak','Bronco','James'])for(const text of [
     'schau dir meinen Bildschirm an','was siehst du','lies mir diese Fehlermeldung vor',
     'was ist das für ein Fenster','erklär mir, was auf meinem Bildschirm passiert',
-    'was bedeutet diese Fehlermeldung','was habe ich hier geöffnet','lies mir das vor'
+    'was bedeutet diese Fehlermeldung','was habe ich hier geöffnet'
   ])assert.equal(commands.isDesktopCommand(`${name}, ${text}?`),true,`${name}: ${text}`);
 });
 
@@ -81,7 +81,7 @@ test('Kein ausdrücklicher Befehl bedeutet keine Einwilligungsabfrage und keine 
 
 test('Einwilligung gilt im Prozess, jede weitere Aufnahme benötigt einen neuen Befehl',async()=>{
   const f=fixture({capture:async()=>{f.calls.capture++;return Buffer.from([255,216,255,1,255,217]);}}),service=f.service();
-  await service.analyze(question);await service.analyze('James, lies mir das vor');
+  await service.analyze(question);await service.analyze('James, schau mal');
   assert.equal(f.calls.consent,1);assert.equal(f.calls.capture,2);assert.equal(f.calls.fetch,2);
 });
 
@@ -122,11 +122,11 @@ test('Aufnahmefehler und Nicht-Windows-Plattformen bleiben kontrolliert',async()
   await assert.rejects(load().capturePrimaryScreen({platform:'win32',execFileImpl:(_f,_a,_o,cb)=>cb(Error('private pixels'))}),error=>!error.message.includes('private pixels'));
 });
 
-test('Aufnahmeskript kopiert nur den primären Monitor, verkleinert und entsorgt Speicher ohne Dateispeicherung',()=>{
+test('Aufnahmeskript kopiert genau einen ausgewählten Monitor, verkleinert und entsorgt Speicher ohne Dateispeicherung',()=>{
   const script=fs.readFileSync(path.join(__dirname,'..','scripts','capture-primary-screen.ps1'),'utf8');
   assert.match(script,/PrimaryScreen.Bounds/);assert.equal((script.match(/CopyFromScreen\(/g)||[]).length,1);
   assert.match(script,/1600/);assert.match(script,/MemoryStream/);assert.match(script,/finally/);assert.match(script,/Dispose/);
-  assert.doesNotMatch(script,/WriteAllBytes|WriteAllText|Out-File|Set-Content|Start-Process|SendKeys|mouse_event|VirtualScreen|AllScreens/i);
+  assert.doesNotMatch(script,/WriteAllBytes|WriteAllText|Out-File|Set-Content|Start-Process|SendKeys|mouse_event|VirtualScreen/i);
 });
 
 test('Auch täuschend formatierte Transportfehler dürfen keine privaten Inhalte durchreichen',async()=>{
@@ -134,4 +134,23 @@ test('Auch täuschend formatierte Transportfehler dürfen keine privaten Inhalte
   await assert.rejects(f.service().analyze(question),error=>{
     assert.doesNotMatch(error.message,/sk-test|private image/);return true;
   });
+});
+
+
+test('Statusmeldungen folgen tatsächlichen Monitor-, Aufnahme- und Übertragungsschritten',async()=>{
+  const stages=[];
+  const f=fixture({onStatus:message=>stages.push(message),getSnapshot:async()=>{assert.match(stages.at(-1),/Zielmonitor/);return {monitors:[{id:'test',number:1,primary:true,bounds:{x:0,y:0,width:100,height:100}}]};},
+    capture:async()=>{assert.match(stages.at(-1),/wird aufgenommen/);return Buffer.from([255,216]);},
+    fetchImpl:async()=>{assert.match(stages.at(-1),/Übertragung/);return {ok:true,json:async()=>{assert.match(stages.at(-1),/Antwort.*ausgewertet/);return {output_text:'Ein Testfenster.'};}};}});
+  await f.service().analyze(question);assert.match(stages.at(-1),/Bildanalyse abgeschlossen/);
+  assert.doesNotMatch(stages.join(' '),/sk-test|data:image|Jeffrey/);
+});
+test('Echter Abbruch beendet laufenden HTTP-Aufruf und gibt den Dienst für nächste Fragen frei',async t=>{
+  t.mock.timers.enable({apis:['setInterval']});let current=true,signal,release,entered;
+  const ready=new Promise(done=>{entered=done;});
+  let requests=0;const f=fixture({capture:async()=>Buffer.from([255,216]),fetchImpl:async(_url,opts)=>{if(++requests>1)return {ok:true,json:async()=>({output_text:'Nächste Frage beantwortet.'})};signal=opts.signal;entered();return new Promise((resolve,reject)=>{release=()=>resolve({ok:true,json:async()=>({output_text:'Test'})});signal.addEventListener('abort',()=>reject(Error('aborted')),{once:true});});}});
+  const service=f.service(),task=assert.rejects(service.analyze(question,{isCurrent:()=>current}));await ready;
+  try{current=false;t.mock.timers.tick(100);assert.equal(signal.aborted,true);}
+  finally{release();await task;}
+  current=true;assert.equal(await service.analyze(question,{isCurrent:()=>current}),'Nächste Frage beantwortet.');assert.equal(requests,2);
 });

@@ -1,4 +1,5 @@
-# One explicit request, one primary-screen copy; no files, clipboard or input actions.
+# One explicit request, one selected-screen copy; no files, clipboard or input actions.
+param([int]$X=0, [int]$Y=0, [int]$Width=0, [int]$Height=0)
 $ErrorActionPreference = 'Stop'
 $bitmap = $null
 $graphics = $null
@@ -11,9 +12,15 @@ try {
     Add-Type -AssemblyName System.Windows.Forms
     Add-Type -AssemblyName System.Drawing
     # Physical pixels also on monitors with Windows display scaling enabled.
-    Add-Type -TypeDefinition 'using System.Runtime.InteropServices; public static class DesktopCaptureDpi { [DllImport("user32.dll")] public static extern bool SetProcessDPIAware(); }'
-    [void][DesktopCaptureDpi]::SetProcessDPIAware()
+    . (Join-Path $PSScriptRoot 'desktop-native.ps1')
+    [DesktopNative]::EnableDpi()
     $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+    if ($Width -gt 0 -and $Height -gt 0) {
+        $bounds = New-Object System.Drawing.Rectangle($X,$Y,$Width,$Height)
+        # Refuse stale coordinates after hotplug; never copy an arbitrary desktop rectangle.
+        $matches = @([System.Windows.Forms.Screen]::AllScreens | Where-Object { $_.Bounds.Equals($bounds) })
+        if ($matches.Count -ne 1) { throw 'Target display changed' }
+    }
     if ($bounds.Width -le 0 -or $bounds.Height -le 0) { throw 'No primary screen' }
     $bitmap = New-Object System.Drawing.Bitmap($bounds.Width, $bounds.Height)
     $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
@@ -34,7 +41,7 @@ try {
     [Console]::Out.Write([Convert]::ToBase64String($bytes))
 } catch {
     # Do not expose desktop data or native error details through stderr.
-    [Console]::Error.Write('Primary screen capture unavailable.')
+    [Console]::Error.Write('Screen capture unavailable.')
     exit 1
 } finally {
     if ($bytes) { [Array]::Clear($bytes, 0, $bytes.Length) }
