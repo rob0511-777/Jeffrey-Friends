@@ -2,16 +2,23 @@
 const path=require('node:path');
 const {execFile,spawn}=require('node:child_process');
 const prefix=['-NoLogo','-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File'];
+const STAGES=new Set(['initialize','target','focus','condition','enumerate','selection','transport']);
+const CODES=new Set(['none','no-selection','no-text-pattern','password-field','no-window','multiple-selections','selection-limit','provider-error','initialization-failed','access-denied','element-unavailable','partial-provider-error','query-limit','process-failed','timeout','invalid-response']);
+const ROUTES=new Set(['none','focus','root','descendants']);
+function safeSelectionDiagnostic(value){
+  return {stage:STAGES.has(value?.stage)?value.stage:'selection',code:CODES.has(value?.code)?value.code:'provider-error',route:ROUTES.has(value?.route)?value.route:'none'};
+}
 // Only foreground HWND metadata is observed. No text, titles, pixels or polling.
 function createWindowsDesktop({platform=process.platform,execFileImpl=execFile,spawnImpl=spawn}={}){
   let child=null,lastHandle='0',pending='';
   function run(script,handle=lastHandle){
     if(platform!=='win32')return Promise.reject(new Error('Textauswahl und Fenstererkennung sind nur unter Windows verfügbar.'));
     return new Promise((resolve,reject)=>{
-      execFileImpl('powershell.exe',[...prefix,path.join(__dirname,'scripts',script),'-OwnerPid',String(process.pid),'-LastHandle',handle],
+      const apartment=script==='read-selection.ps1'?['-Mta']:[];
+      execFileImpl('powershell.exe',[...apartment,...prefix,path.join(__dirname,'scripts',script),'-OwnerPid',String(process.pid),'-LastHandle',handle],
         {windowsHide:true,encoding:'buffer',timeout:8000,maxBuffer:256*1024},(error,stdout)=>{
           try{if(error)throw error;resolve(JSON.parse(stdout.toString('utf8').replace(/^\uFEFF/,'')));}
-          catch{reject(new Error('Windows-Zugriff nicht verfügbar. Anwendung unterstützt Textauswahl eventuell nicht oder ist geschützt.'));}
+          catch{const failure=new Error('Windows-Zugriff nicht verfügbar. Bitte die UIA-Diagnose prüfen.');failure.code=error?.killed?'timeout':error?'process-failed':'invalid-response';reject(failure);}
           finally{if(Buffer.isBuffer(stdout))stdout.fill(0);}
         });
     });
@@ -33,7 +40,16 @@ function createWindowsDesktop({platform=process.platform,execFileImpl=execFile,s
     stop(){child?.kill();child=null;lastHandle='0';pending='';},
     snapshot:()=>run('desktop-snapshot.ps1'),
     // Freeze the handle before any consent dialog steals focus.
-    readSelection:(handle)=>run('read-selection.ps1',handle||lastHandle)
+    async readSelection(handle){
+      if(platform!=='win32')return run('read-selection.ps1',handle||lastHandle);
+      try{
+        const raw=await run('read-selection.ps1',handle||lastHandle);
+        const status=['ok','empty','unsupported','protected','no-window','ambiguous','too-long','error'].includes(raw?.status)?raw.status:'error';
+        const result={status,text:status==='ok'&&typeof raw.text==='string'?raw.text:''};
+        if(raw?.diagnostic||status==='error')result.diagnostic=safeSelectionDiagnostic(raw?.diagnostic);
+        return result;
+      }catch(error){return {status:'error',text:'',diagnostic:safeSelectionDiagnostic({stage:'transport',code:error.code})};}
+    }
   });
 }
-module.exports={createWindowsDesktop};
+module.exports={createWindowsDesktop,safeSelectionDiagnostic};

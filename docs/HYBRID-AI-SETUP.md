@@ -1,5 +1,12 @@
 # Hybrid-KI und Kostenkontrolle einrichten
 
+Die einzige vorhandene Auswahl **KI-Modus** befindet sich direkt unter dem
+vollständigen Kasten **DIREKT SPRECHEN**. Optionen und Speicherung bleiben
+unverändert. API-Schlüssel, Kostenanzeigen und weitere Einstellungen bleiben
+unter **KI-ANBIETER & KOSTEN**. Ein Wechsel stoppt aktive OpenAI-/Gemini-Verbindungen
+und separat laufendes Vorlesen; es wird kein zweiter Gesprächsweg gestartet.
+
+
 Stand der Preisannahmen: 24. Oktober 2026. Die in der App hinterlegten Preise sind editierbare Rechenwerte, keine Live-Preisliste und kein Rechnungssaldo.
 
 ## Die vier Modi

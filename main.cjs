@@ -669,6 +669,7 @@ function handleAction(event, payload) {
   else if (action === 'listen') void doListen();
   else if (action === 'stop-speaking') stopTalking();
   else if (action === 'ai-provider' && AI_PROVIDERS.includes(value)) {
+    stopTalking();
     if(liveActive){sendAction('realtime-stop');stopGemini('Anbieterwechsel');liveActive=false;}
     settings.aiProvider=value;messages=[];storeSoon();syncState();sendProviderStatus();status(`KI-Modus: ${value}`);
   } else if(action==='local-base-url'||action==='local-model'||action==='gemini-model'||action==='monthly-budget'||action==='auto-paid-fallback'||action==='block-paid-budget'||action==='pricing'){

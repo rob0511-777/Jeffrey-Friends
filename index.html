@@ -42,6 +42,15 @@
         <p id="realtime-status" class="voice-status" role="status">Bereit · Mikrofon aus · Keine laufenden Kosten</p>
         <p id="realtime-error" class="voice-error" role="alert" hidden></p>
       </div>
+      <div class="quick-provider">
+        <label class="voice-label" for="ai-provider">KI-Modus</label>
+        <select id="ai-provider" class="voice-select">
+          <option value="openai" selected>OpenAI · Qualität · bestehende Stimmen</option>
+          <option value="gemini">Gemini · Sparmodus · andere Stimmen</option>
+          <option value="local">Lokal · Offline-Text über eigenen Server</option>
+          <option value="auto">Automatisch · Kosten optimieren</option>
+        </select>
+      </div>
       <div class="section-title mode-title">ASSISTENT-MODUS</div>
       <div class="mode-grid" role="group" aria-label="Modus wählen">
         <button data-modechoice="active" aria-pressed="true">🟢 Aktiv</button>
@@ -169,13 +178,6 @@
         </div>
         <div class="provider-panel">
           <div class="section-title">🤖 KI-ANBIETER &amp; KOSTEN</div>
-          <label class="voice-label" for="ai-provider">KI-Modus</label>
-          <select id="ai-provider" class="voice-select">
-            <option value="openai" selected>OpenAI · Qualität · bestehende Stimmen</option>
-            <option value="gemini">Gemini · Sparmodus · andere Stimmen</option>
-            <option value="local">Lokal · Offline-Text über eigenen Server</option>
-            <option value="auto">Automatisch · Kosten optimieren</option>
-          </select>
           <p id="provider-description" class="voice-hint">OpenAI ist der bewährte Standard. Jeffrey- und Bronco-Filter sowie alle Charakterprofile bleiben unverändert.</p>
 
           <div id="local-provider-box" class="key-box" hidden>

@@ -58,3 +58,8 @@ test('Abbruch während Cloudzustimmung verhindert Vorlesen und Cloudübertragung
   let current=true;const {service,calls}=fixture({requestConsent:async()=>{current=false;return true;}});
   await assert.rejects(service.execute('read',{isCurrent:()=>current}));assert.equal(calls.speak.length,0);assert.equal(calls.fetch.length,0);
 });
+test('Technische UIA-Fehler werden mit sicherem Code statt als nicht unterstützt erklärt',async()=>{
+  const {service,calls}=fixture({readSelection:async()=>({status:'error',text:'GEHEIM',diagnostic:{stage:'initialize',code:'initialization-failed',message:'GEHEIM'}})});
+  const reply=await service.execute('read');assert.match(reply.message,/Technischer Fehler/);assert.match(reply.message,/initialize\/initialization-failed/);
+  assert.doesNotMatch(reply.message,/GEHEIM|keine geeignete Textauswahl/);assert.equal(calls.speak.length,0);assert.equal(calls.fetch.length,0);
+});

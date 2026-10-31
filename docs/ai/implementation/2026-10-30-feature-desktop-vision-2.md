@@ -55,3 +55,26 @@ Monitor-Metadaten, Datenschutzdialog, Aufnahme und HTTP-Antwort.
 
 `IDLE_MS=45000`, das 15-Minuten-Limit, Charaktere, Stimmen, Filter sowie die
 Providerimplementierungen bleiben unverändert. Keine neuen Funktionen oder APIs.
+
+
+## 31.10.2026: UIA-Lesepfad und KI-Modus-Platzierung
+
+`scripts/read-selection.ps1` unterscheidet technische Fehler, fehlendes TextPattern,
+leere Auswahl, Passwortschutz und Limits. UIA-Initialisierung und Condition-Binding
+sind ausdrücklich typisiert; der Aufruf nutzt MTA. Fokus samt Vorfahren wird nur
+nach Zugehörigkeitsprüfung zum Ziel gelesen; danach Root und sichtbare Nachfahren.
+Fehler einzelner Elemente werden isoliert. Diagnose enthält feste Schritt-/Code-/
+Suchwegwerte ohne Text, Fensternamen, Handles oder rohe Exceptions.
+`windows-desktop.cjs` begrenzt diese Felder und unterscheidet Prozessfehler/Timeout.
+`selected-text.cjs` zeigt technische Fehler getrennt von Nicht-Unterstützung an.
+Kein Clipboard, keine Eingaben oder Screenshot-Fallbacks hinzugefügt.
+
+Das vorhandene `ai-provider`-Select samt Label wurde in `index.html` als einzige
+Auswahl direkt unter `quick-live` verschoben; ein lokaler CSS-Abstand hält den
+Bereich kompakt. `renderer.js`, Optionswerte und Speicherpfad bleiben unverändert.
+Der bestehende Anbieterwechsel beendet zusätzlich separates Vorlesen über
+`stopTalking()`. Verbindungsschluss für OpenAI/Gemini bleibt erhalten.
+
+Nachweis: 351 Node-Tests und 18 ausführbare PowerShell-/Fake-UIA-Fälle unter Linux.
+Echte Windows-UIA, Windows PowerShell 5.1 und visuelle Windows-Abnahme stehen aus.
+Details: `docs/ai/testing/2026-10-31-feature-desktop-vision-2-uia.md`.

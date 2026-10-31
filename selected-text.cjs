@@ -1,5 +1,6 @@
 'use strict';
 const {extractOpenAIText}=require('./brain.cjs');
+const {safeSelectionDiagnostic}=require('./windows-desktop.cjs');
 const MAX_SELECTION=24000;
 function createSelectedText({getProvider,getKey,isAllowed,checkBudget,readSelection,requestConsent,readAloud,localReply,
   fetchImpl=globalThis.fetch,onUsage=()=>{}}){
@@ -15,10 +16,17 @@ function createSelectedText({getProvider,getKey,isAllowed,checkBudget,readSelect
       if(selected?.status!=='ok'){
         const messages={empty:'Ich sehe gerade keinen markierten Text. Soll ich stattdessen deinen Bildschirm untersuchen?',
           unsupported:'Diese Anwendung stellt keine geeignete Textauswahl über Windows UI Automation bereit.',
+          protected:'Die Textauswahl ist geschützt und wird nicht ausgelesen.',
+          error:'Technischer Fehler beim Auslesen der Windows-Textauswahl.',
           ambiguous:'Die Anwendung meldet mehrere Textauswahlen. Bitte markiere den gewünschten Abschnitt erneut.',
           'too-long':'Die Textauswahl ist zu lang. Bitte markiere höchstens 24.000 Zeichen.',
           'no-window':'Ich finde kein geeignetes Windows-Fenster mit Textauswahl.'};
-        return {private:true,message:messages[selected?.status]||messages.unsupported};
+        let message=messages[selected?.status]||messages.error;
+        if(selected?.status==='error'){
+          const diagnostic=safeSelectionDiagnostic(selected.diagnostic);
+          message+=` UIA-Diagnose: ${diagnostic.stage}/${diagnostic.code}. Bitte die Anwendung und Berechtigungen prüfen.`;
+        }
+        return {private:true,message};
       }
       text=typeof selected.text==='string'?selected.text:'';selected.text='';
       if(!text.trim())return {private:true,message:'Ich sehe gerade keinen markierten Text. Soll ich stattdessen deinen Bildschirm untersuchen?'};

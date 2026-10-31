@@ -82,6 +82,57 @@ Großschreibung, gebräuchliche Namensvarianten und Höflichkeit sind berücksic
 Zitate, Verneinungen, hypothetische Sätze und angehängte Aktionen sind keine
 Erlaubnis. Es gibt keine Cloudanfrage zur Befehlsinterpretation.
 
+## Korrektur der Windows-Textauswahl (31.10.2026)
+
+Der bisherige äußere PowerShell-`catch` meldete sämtliche technischen Ausnahmen
+als `unsupported`. Dadurch konnte ein Initialisierungs-, Condition-, Fenster- oder
+Providerfehler die irreführende Meldung „keine geeignete Textauswahl“ erzeugen.
+Die ursprüngliche konkrete Windows-Ausnahme lässt sich aus dieser alten Meldung
+nicht rekonstruieren; ein tatsächlicher Fehler im Windows-`PropertyCondition`-
+Konstruktor wurde in der Linux-Umgebung nicht nachgewiesen.
+
+Der korrigierte Leseprozess verwendet einen eigenen MTA-PowerShell-Aufruf, lädt
+UIAutomationTypes/Client ausdrücklich und erzeugt `PropertyCondition` über den
+expliziten Konstruktor mit typisiertem Boolean. Zuerst wird das fokussierte Element
+mit seinen TextPattern-Vorfahren untersucht, jedoch nur, wenn die Vorfahrenkette
+zum zuvor ausgewählten Fremdfenster führt. Jeffreys eigene Fenster und fremde
+Fokusbäume werden ausgeschlossen. Hat Jeffrey den Fokus übernommen, bleibt die
+Suche im gespeicherten Fremdfenster möglich, ohne den Fokus zurückzuverschieben.
+
+Erst danach folgt die begrenzte Suche nach sichtbaren TextPattern-Elementen im
+Zielfenster. Ein einzelnes veraltetes oder fehlerhaftes Kindelement verhindert
+nicht mehr das Lesen einer anderen zugänglichen Auswahl. Verdeckte Elemente
+(z. B. aus inaktiven Bereichen), Passwortfelder und eigene Prozessfenster werden
+nicht gelesen. Doppelte identische Auswahlbereiche werden zusammengeführt;
+verschiedene zugängliche Auswahlen bleiben ohne eindeutigen Fokus mehrdeutig.
+Ein Caret ohne Textmarkierung ist weiterhin keine Auswahl. Es gibt kein Strg+C,
+keine Zwischenablage, keine simulierten Eingaben und keinen Ersatz-Screenshot.
+
+Diagnostik enthält ausschließlich feste Werte für **Schritt**, **Code** und
+**Suchweg**. Zum Beispiel:
+
+- `initialize/initialization-failed`: technische UIA-Initialisierung fehlgeschlagen.
+- `condition/provider-error`: Condition-Erzeugung technisch fehlgeschlagen.
+- `selection/element-unavailable`: UIA-Element während des Zugriffs verschwunden.
+- `transport/timeout`: der begrenzte Windows-Prozessaufruf dauerte zu lange.
+- `no-text-pattern`: der abgeschlossene Suchlauf fand tatsächlich keinen geeigneten
+  TextPattern-Zugang; `no-selection` bezeichnet dagegen fehlende Markierung.
+
+Die App unterscheidet technische Fehler sichtbar von „nicht unterstützt“.
+Diagnosefelder werden im Hauptprozess auf feste erlaubte Werte begrenzt; rohe
+Fehlermeldungen/Stacktraces, Fenstertitel, Prozessnamen, Handles, ausgewählte Texte
+und API-Schlüssel werden nicht als Diagnostik weitergereicht oder protokolliert.
+Bei Fehlern enthalten Rückgaben keinen ausgewählten Text. Bei Erfolg darf die
+Auswahl ausschließlich den bestehenden geschützten Vorlese-/Auswertungspfad nutzen.
+
+Automatisierte PowerShell-Tests mit Fake-UIA zeigen die Korrektur für Fokus,
+TextPattern-Vorfahren, zuvor aktives Fenster, fehlerhafte Kindelemente, verdeckte
+Elemente, Grenzen und Diagnose. **Echter Windows-Editor und Browser unter Windows
+11 sowie Windows PowerShell 5.1 sind noch manuell zu prüfen.** Nicht jede Anwendung
+stellt geeignete UIA-Schnittstellen bereit; Unterstützung wird nicht erfunden.
+Die ursprüngliche Fehlermeldung ist deshalb kein Beleg dafür, dass Windows-Editor
+oder ein bestimmter Browser prinzipiell ungeeignet wäre.
+
 ## Anbieter, Sprache, Kosten und Datenschutz
 
 | Aktion | OpenAI | Lokal / Offline | Gemini Live |
@@ -198,6 +249,9 @@ Monitorauswahl/Fallbacks, negative Positionen und physische DPI-Geometrie,
 Textauswahlzustände, Zustimmung, Kostenprüfung, Stopp, lange Ausgaben,
 Werkzeugblockade und die bestehende Charakter-/Provider-/Animations-Regression.
 Mock-Tests belegen keine native Windows-Kompatibilität.
+
+Aktueller zusätzlicher Testnachweis und genaue Windows-Nachtests:
+[UIA-Korrektur und KI-Modus-Platzierung](ai/testing/2026-10-31-feature-desktop-vision-2-uia.md).
 
 ## Manuelle Windows-Prüfliste – noch nicht durchgeführt
 

@@ -64,3 +64,14 @@ test('Bestehende Charakter- und Audioeffektmodule werden durch Hybrid-KI nicht v
   assert.match(diffSensitive,/window\.JeffreyVoiceEffect\.create/);
   assert.match(diffSensitive,/JeffreyLipSyncRuntime\?\.attachStream/);
 });
+test('Einzige KI-Modus-Auswahl folgt direkt auf den gesamten Direkt-Sprechen-Kasten',()=>{
+  const html=read('index.html');assert.equal((html.match(/id="ai-provider"/g)||[]).length,1);
+  const quick=html.indexOf('class="quick-live"'),assistant=html.indexOf('ASSISTENT-MODUS'),provider=html.indexOf('id="ai-provider"');
+  assert.ok(quick<provider&&provider<assistant);
+  const area=html.slice(quick,assistant);
+  assert.match(area,/<p id="realtime-error"[^>]*><\/p>\s*<\/div>\s*<div[^>]*>\s*<label[^>]*for="ai-provider"/);
+  const options=html.match(/<select id="ai-provider"[^>]*>([\s\S]*?)<\/select>/)[1];
+  assert.deepEqual([...options.matchAll(/<option value="([^"]+)"/g)].map(m=>m[1]),['openai','gemini','local','auto']);
+  const costs=html.slice(html.indexOf('class="provider-panel"'));assert.doesNotMatch(costs,/id="ai-provider"/);
+  for(const id of ['api-key','gemini-api-key','local-model','cost-session','monthly-budget'])assert.ok(costs.includes(`id="${id}"`));
+});

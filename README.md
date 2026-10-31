@@ -44,6 +44,12 @@ Kelly und Krak besitzen ein lokales, audio-synchronisiertes 2D-Viseme-Rig. Die M
 
 Der Anbieter bleibt während einer aktiven Sprachsitzung fest. Dadurch entstehen keine parallelen Mehrfachanfragen und kein hörbarer Anbieterwechsel mitten im Gespräch.
 
+Der vorhandene **KI-Modus** steht direkt unter dem gesamten Kasten
+**DIREKT SPRECHEN**. Anbieter, gespeicherte Auswahl und Optionen bleiben gleich;
+API-Schlüssel, Kosten und weitere Einstellungen stehen weiterhin unter
+**KI-ANBIETER & KOSTEN**. Ein Wechsel beendet laufende Sprachverbindungen und
+separates Vorlesen, bevor der neue Modus verwendet wird.
+
 ### Desktop sehen und verstehen
 
 Alle fünf Charaktere verstehen lokale natürliche Bildschirm- und Textbefehle:
@@ -67,6 +73,11 @@ Laufende Desktop-Anfragen bleiben bei zusätzlichen Spracherkennungsereignissen
 freigegeben. Abbrechen erfolgt ausdrücklich über „Stopp“, Schlafmodus,
 Ausblenden, Sitzungsende oder Charakterwechsel. Die einmalige Bild-Zustimmung
 gilt bis zum vollständigen App-Ende, auch nach dem 45-Sekunden-Idle-Disconnect.
+
+Die Windows-Textauswahl prüft zuerst das fokussierte Element samt TextPattern-
+Vorfahren im richtigen Fremdfenster, danach sichtbare TextPattern-Elemente.
+Technische Fehler werden getrennt von fehlender Unterstützung gemeldet, mit
+festen UIA-Diagnosecodes ohne Textinhalte, Fenstertitel oder rohe Ausnahmen.
 
 **Implementiert, unter Windows noch manuell zu prüfen:** UI Automation,
 Fokuswechsel, mehrere reale Monitore und gemischte DPI-Skalierung. Gemini Live hat

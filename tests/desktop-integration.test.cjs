@@ -12,7 +12,7 @@ function mainHarness(service,selection){
   const localRequire=createRequire(path.join(root,'main.cjs'));
   const context=vm.createContext({console,setTimeout:()=>1,clearTimeout(){},setInterval:()=>1,clearInterval(){},process,Buffer,URL,fetch:()=>{throw Error('No live requests');},
     require:name=>name==='electron'?{app:{commandLine:{appendSwitch(){}},requestSingleInstanceLock:()=>false,quit(){}}}:name==='./voicing.cjs'?{speak:text=>{spoken.push(text);return {promise:Promise.resolve(''),stop(){}};}}:localRequire(name)});
-  vm.runInContext(read('main.cjs')+`\nglobalThis.api={doChat,handleAction,readSelectedAloud,analyzeLiveDesktop:typeof analyzeLiveDesktop==='function'?analyzeLiveDesktop:null,setup(s,w,vision,selection){settings=s;controls=w;desktopVision=vision;selectedText=selection;liveActive=true;liveSessionId='test-session';},setSleep(){settings.mode='sleep';},transcript(){return lastUserTranscript;}};`,context);
+  vm.runInContext(read('main.cjs')+`\nglobalThis.api={doChat,handleAction,readSelectedAloud,provider:()=>settings.aiProvider,setGeminiSession(s){geminiSession=s;},analyzeLiveDesktop:typeof analyzeLiveDesktop==='function'?analyzeLiveDesktop:null,setup(s,w,vision,selection){settings=s;controls=w;desktopVision=vision;selectedText=selection;liveActive=true;liveSessionId='test-session';},setSleep(){settings.mode='sleep';},transcript(){return lastUserTranscript;}};`,context);
   context.api.setup({character:'bronco',mode:'active',aiProvider:'openai',speakReplies:true},window,service,selection);
   return {api:context.api,sender,sent,spoken,onAction(fn){onAction=fn;}};
 }
@@ -465,4 +465,24 @@ test('Absichtlicher IPC-Abbruch wird als Abbruch bestätigt statt als Handlerfeh
   const result=task.then(value=>({value}),error=>({error}));await f.reached;
   main.api.handleAction({sender:main.sender},{action:'stop-speaking'});f.release();
   const ended=await result;assert.equal(ended.error,undefined);assert.equal(ended.value.cancelled,true);
+});
+
+
+test('KI-Modus-Wechsel beendet aktive OpenAI-Verbindung und verwendet die bestehende Einstellung',()=>{
+  const main=mainHarness({analyze:async()=>''}),renderer=rendererHarness(main);
+  main.api.handleAction({sender:main.sender},{action:'ai-provider',value:'local'});
+  assert.equal(renderer.c.stopped,true);assert.equal(main.api.provider(),'local');
+  assert.ok(main.sent.some(m=>m.action==='realtime-stop'));
+});
+test('KI-Modus-Wechsel stoppt Gemini genau einmal ohne neue Verbindung',()=>{
+  let stopped=0;const main=mainHarness({analyze:async()=>''}),renderer=rendererHarness(main);
+  renderer.c.provider='gemini';main.api.setGeminiSession({stop(){stopped++;}});
+  main.api.handleAction({sender:main.sender},{action:'ai-provider',value:'openai'});
+  assert.equal(stopped,1);assert.equal(renderer.c.stopped,true);assert.equal(main.api.provider(),'openai');
+});
+test('KI-Modus-Wechsel bricht auch eine laufende lokale Windows-Sprachausgabe ab',async()=>{
+  const main=mainHarness({analyze:async()=>''});
+  const task=main.api.readSelectedAloud('Wort '.repeat(300),{provider:'offline',isCurrent:()=>true});
+  main.api.handleAction({sender:main.sender},{action:'ai-provider',value:'local'});
+  await assert.rejects(task,/abgebrochen/);assert.equal(main.spoken.length,1);
 });
