@@ -11,6 +11,7 @@
   <script src="lip-sync.js" defer></script>
   <script src="renderer.js" defer></script>
   <script src="voice-commands.js" defer></script>
+  <script src="mouse-commands.js" defer></script>
   <script src="bronco-voice.js" defer></script>
   <script src="jeffrey-voice.js" defer></script>
   <script src="realtime.js" defer></script>
@@ -51,6 +52,19 @@
           <option value="auto">Automatisch · Kosten optimieren</option>
         </select>
       </div>
+      <section class="mouse-panel" aria-label="Lokale Mauspositionierung">
+        <div class="section-title">KOORDINATENNETZ · WINDOWS</div>
+        <div class="voice-row"><button id="mouse-start" class="secondary" type="button">Raster anzeigen</button><button id="mouse-exit" class="secondary" type="button">Modus beenden</button></div>
+        <button id="mouse-stop" class="mouse-stop" type="button">■ Maus STOPP</button>
+        <p id="mouse-status" class="voice-hint" role="status">Aus · Keine Klicks. Im Koordinatenmodus hört Windows lokal zu; Live pausiert.</p>
+        <details><summary>Raster &amp; Bewegung einstellen</summary>
+          <label for="mouse-opacity" class="voice-label">Sichtbarkeit <output id="mouse-opacity-value">100 %</output></label>
+          <input id="mouse-opacity" type="range" min="0" max="100" step="1" value="100">
+          <label for="mouse-speed" class="voice-label">Bewegungsgeschwindigkeit (Pixel/Sekunde)</label><input id="mouse-speed" class="voice-input" type="number" min="200" max="3000" step="100" value="900">
+          <label for="mouse-depth" class="voice-label">Maximale Unterteilungstiefe (1–8, zusätzlich Pixelgrenze)</label><input id="mouse-depth" class="voice-input" type="number" min="1" max="8" step="1" value="4">
+          <p class="voice-hint">„Berta 3“, „links oben“, „Feld unterteilen“, „zurück“, „Raster ausblenden“. Bei 0 % bleibt die lokale Sprachsteuerung aktiv. „Koordinatennetz beenden“ schaltet sie aus.</p>
+        </details>
+      </section>
       <div class="section-title mode-title">ASSISTENT-MODUS</div>
       <div class="mode-grid" role="group" aria-label="Modus wählen">
         <button data-modechoice="active" aria-pressed="true">🟢 Aktiv</button>
@@ -178,6 +192,11 @@
         </div>
         <div class="provider-panel">
           <div class="section-title">🤖 KI-ANBIETER &amp; KOSTEN</div>
+          <details class="privacy-panel"><summary>Datenschutz · dauerhafte Zustimmungen</summary>
+            <p class="voice-hint">Nur für ausdrückliche Anfragen, getrennt nach Datenart und Empfänger. „Einmal erlauben“ gilt für genau eine Anfrage. Lokales Vorlesen benötigt keine Cloud-Zustimmung. Windows-Systemberechtigungen werden dadurch nicht ersetzt.</p>
+            <p id="privacy-screen-status" class="voice-hint"></p><button id="privacy-screen-revoke" type="button" class="secondary">Bildschirm-Freigabe widerrufen</button>
+            <p id="privacy-text-status" class="voice-hint"></p><button id="privacy-text-revoke" type="button" class="secondary">Text-Freigabe widerrufen</button>
+          </details>
           <p id="provider-description" class="voice-hint">OpenAI ist der bewährte Standard. Jeffrey- und Bronco-Filter sowie alle Charakterprofile bleiben unverändert.</p>
 
           <div id="local-provider-box" class="key-box" hidden>

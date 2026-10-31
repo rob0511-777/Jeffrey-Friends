@@ -13,7 +13,7 @@
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   let intensity = .35, hideAt = Infinity, lastNoiseAt = 0, lastPhase = null;
   let currentMode = 'active', commentsAllowed = true, chatBusy = false, voiceBusy = false;
-  let activeCharacter='jeffrey';
+  let activeCharacter='jeffrey',mouseActive=false;
   // Stufe 4.3: Das Audio-Viseme-Rig wird von lip-sync-runtime.js gesteuert.
   const activeName=()=>({jeffrey:'Jeffrey',kelly:'Kelly',krak:'Krak',bronco:'Bronco',james:'James'})[activeCharacter]||'Jeffrey';
   const phrases = {
@@ -90,11 +90,13 @@
       quiet:'Keine spontanen Kommentare. Auf Abruf bin ich da.',
       sleep:'Ich schlafe: keine Kommentare und keine Auftritte.'
     })[currentMode];
+    document.getElementById('mouse-start').disabled=currentMode==='sleep';
+    document.getElementById('mouse-exit').disabled=!mouseActive;
     document.getElementById('comments').checked = commentsAllowed;
     document.getElementById('comments').disabled = currentMode !== 'active';
     document.getElementById('test-comment').disabled = currentMode !== 'active' || !commentsAllowed;
     document.getElementById('appear').disabled = currentMode === 'sleep';
-    document.getElementById('voice-listen').disabled = currentMode === 'sleep' || chatBusy || voiceBusy;
+    document.getElementById('voice-listen').disabled = currentMode === 'sleep' || chatBusy || voiceBusy || mouseActive;
     document.getElementById('wake-test').disabled = currentMode === 'sleep' || !document.getElementById('wake-enabled').checked;
     document.getElementById('chat-send').disabled = currentMode === 'sleep' || chatBusy;
     document.getElementById('chat-input').disabled = currentMode === 'sleep';
@@ -131,6 +133,10 @@
   }
   function localAction(action, value) {
     const now = performance.now();
+    if(action==='mouse-state'){
+      mouseActive=Boolean(value?.active);document.getElementById('mouse-status').textContent=value?.message||(mouseActive?'Koordinatenmodus aktiv · lokale Sprachsteuerung':'Koordinatenmodus aus.');refreshControls();return;
+    }
+    if(action==='mouse-status'){document.getElementById('mouse-status').textContent=String(value);return;}
     if(action==='comment-audio'){playCommentAudio(value);return;}
     if(action==='provider-status'){renderProviderStatus(value);return;}
     if(action==='character'){showCharacter(value);return;}
@@ -206,6 +212,9 @@
   }
   function receiveState(settings) {
     if (!settings) return;
+    document.getElementById('mouse-opacity').value=settings.mouseGridOpacity??100;document.getElementById('mouse-opacity-value').textContent=(settings.mouseGridOpacity??100)+' %';
+    document.getElementById('mouse-speed').value=settings.mouseSpeed??900;document.getElementById('mouse-depth').value=settings.mouseGridMaxDepth??4;
+    for(const kind of ['screen','text'])document.getElementById('privacy-'+kind+'-status').textContent=(kind==='screen'?'Bildschirm':'Markierter Text')+': '+(settings.privacyConsents?.version===1&&settings.privacyConsents?.[kind]?.openai===true?'Dauerhaft für OpenAI erlaubt.':'Keine dauerhafte Cloud-Freigabe.');
     currentMode = settings.mode || 'active';
     showCharacter(settings.character||'jeffrey');
     commentsAllowed = Boolean(settings.comments);
@@ -282,6 +291,11 @@
     if(native && mode==='controls') {voiceBusy=true;refreshControls();native.send('listen');}
     else localAction('voice-error','Das Mikrofon funktioniert nur in der Windows-App.');
   });
+  for(const name of ['start','stop','exit'])document.getElementById('mouse-'+name).addEventListener('click',()=>dispatch('mouse-'+name));
+  for(const [id,key] of [['mouse-opacity','opacity'],['mouse-speed','speed'],['mouse-depth','maxDepth']])document.getElementById(id).addEventListener(id==='mouse-opacity'?'input':'change',e=>{
+    if(key==='opacity')document.getElementById('mouse-opacity-value').textContent=e.target.value+' %';dispatch('mouse-options',{[key]:Number(e.target.value)});
+  });
+  for(const kind of ['screen','text'])document.getElementById('privacy-'+kind+'-revoke').addEventListener('click',()=>dispatch('privacy-revoke',kind));
   document.getElementById('stop-speaking').addEventListener('click',()=>dispatch('stop-speaking'));
   document.getElementById('ai-provider').addEventListener('change',e=>{
     refreshProviderBoxes(e.target.value);dispatch('ai-provider',e.target.value);setTimeout(requestProviderStatus,100);

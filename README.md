@@ -71,8 +71,11 @@ keine simulierten Eingaben. Unklare Kurzbefehle führen zu einer Rückfrage.
 
 Laufende Desktop-Anfragen bleiben bei zusätzlichen Spracherkennungsereignissen
 freigegeben. Abbrechen erfolgt ausdrücklich über „Stopp“, Schlafmodus,
-Ausblenden, Sitzungsende oder Charakterwechsel. Die einmalige Bild-Zustimmung
-gilt bis zum vollständigen App-Ende, auch nach dem 45-Sekunden-Idle-Disconnect.
+Ausblenden, Sitzungsende oder Charakterwechsel. Bildschirm und Text haben getrennte
+Cloud-Freigaben: **Abbrechen**, **Einmal erlauben** (genau diese Anfrage) oder
+**Auf diesem Gerät dauerhaft erlauben**. Dauerhafte Freigaben für OpenAI überleben
+Sprachsitzungen und App-Neustarts; Widerruf unter **KI-ANBIETER & KOSTEN → Datenschutz**.
+Ältere Freigaben werden nicht automatisch zu dauerhaften Berechtigungen.
 
 Die Windows-Textauswahl prüft zuerst das fokussierte Element samt TextPattern-
 Vorfahren im richtigen Fremdfenster, danach sichtbare TextPattern-Elemente.
@@ -90,6 +93,32 @@ Fokuswechsel, mehrere reale Monitore und gemischte DPI-Skalierung. Gemini Live h
 hier keinen geeigneten Bild-/Textauswahl-/Vorlesepfad; es gibt keinen automatischen
 kostenpflichtigen Anbieterwechsel. Bedienung, Grenzen, Datenschutz und die
 Windows-Prüfliste stehen in [Desktop sehen und verstehen](docs/DESKTOP-ERKENNUNG.md).
+
+### Maus mit der Stimme positionieren
+
+Unter Windows 11: **Raster anzeigen** oder „Jeffrey, zeig das Koordinatennetz“
+(über „Einmal zuhören“, Textfeld oder bestehendes OpenAI-Live-Gespräch).
+Der Modus zeigt ein durchklickbares 4×5-Raster über dem gewählten Monitor.
+„Berta 3“, „Cäsar 2“, „D4 links oben“, „Feld unterteilen“ und „nochmals links oben“
+positionieren den Zeiger schrittweise. Kleine Raster bekommen eine große,
+lesbare Legende. „Zurück“, „Raster neu starten“ und „Maus hierhin“ helfen beim Korrigieren.
+
+**Stopp** und die große Schaltfläche **Maus STOPP** beenden eine Bewegung.
+Es gibt keine Klicks, Doppelklicks, Zieh- oder Scrollaktionen. Geschwindigkeit,
+Unterteilungstiefe und Sichtbarkeit (0–100 %) sind einstellbar und werden gespeichert.
+Bei unsichtbarem Raster bleibt der Koordinatenmodus aktiv; „Koordinatennetz beenden“
+verlässt ihn vollständig. Schlafmodus, Charakterwechsel und App-Ende stoppen ihn ebenfalls.
+
+Im Koordinatenmodus hört ausschließlich ein lokaler deutscher Windows-Erkenner
+auf feste Steuerbefehle; die Live-Verbindung und deren Codewort-Start pausieren.
+Nach Beenden gilt wieder das vorhandene Wakeword-System. Die 45-Sekunden-Begrenzung
+normaler Live-Gespräche bleibt erhalten. Gemini startet den Modus über Oberfläche,
+Textfeld oder einmaliges Windows-Zuhören: sein bestehender Live-Kompatibilitätsmodus
+liefert keine Nutzertranskripte. Es wird kein weiterer Cloud-Sprachdienst ergänzt.
+
+Bedienung, Monitor-/DPI-Regeln, Zustimmungen und Windows-Abnahme:
+[Sprachgesteuertes Koordinatennetz](docs/MAUSSTEUERUNG.md).
+**Implementiert und simuliert geprüft, noch nicht praktisch unter Windows abgenommen.**
 
 ### Voraussetzungen
 

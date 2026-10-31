@@ -24,6 +24,12 @@ const {isDesktopRequest,parseDesktopIntent,isStopCommand}=require('./voice-comma
 const {createDesktopVision}=require('./desktop-vision.cjs');
 const {createWindowsDesktop}=require('./windows-desktop.cjs');
 const {createSelectedText}=require('./selected-text.cjs');
+const {parseMouseCommand}=require('./mouse-commands.js');
+const {createMouseControl}=require('./mouse-control.cjs');
+const {createWindowsMouse}=require('./windows-mouse.cjs');
+const {createGridListener}=require('./grid-listener.cjs');
+const {createGridOverlay}=require('./grid-overlay.cjs');
+const {createPrivacyConsent}=require('./privacy-consent.cjs');
 const {MODES, CORNERS, GESTURES, AI_PROVIDERS, LIVE_VOICES, VOICE_STYLES, COMMENT_VOICES, COMMENT_FREQUENCIES, WAKE_SENSITIVITIES, BRONCO_VOICE_EFFECTS, JEFFREY_VOICE_EFFECTS, normalizeSettings, migrateStartupSettings, canSpontaneouslyComment, pickPhrase, nextCommentDelay} = require('./settings.cjs');
 
 let controls, overlay, tray, settings, file;
@@ -32,7 +38,7 @@ let commentTimer = null, hideTimer = null, saveTimer = null;
 let hitCheckTimer = null, acceptsPointer = false, manuallyMoved = false;
 const ALLOWED = new Set(['show','hide','toggle','gesture','intensity','duration','corner','size','mode','comments','test-comment','open-controls',
   'chat','listen','stop-speaking','ai-provider','speak-replies','read-comments','save-api-key','clear-api-key','realtime-activity','wake-enabled','wake-test','wake-sensitivity','live-voice','voice-style','bronco-voice-effect','jeffrey-voice-effect','web-enabled','browser-enabled',
-  'character','memory-enabled','memory-add','memory-remove','memory-clear','local-base-url','local-model','gemini-model','auto-paid-fallback','monthly-budget','block-paid-budget','pricing','save-provider-key','clear-provider-key','response-usage','pc-tools-enabled','pc-alerts-enabled','pc-status-test','comment-voice','comment-frequency','comment-audio-ended','selection-audio-ended']);
+  'character','memory-enabled','memory-add','memory-remove','memory-clear','local-base-url','local-model','gemini-model','auto-paid-fallback','monthly-budget','block-paid-budget','pricing','save-provider-key','clear-provider-key','response-usage','pc-tools-enabled','pc-alerts-enabled','pc-status-test','comment-voice','comment-frequency','comment-audio-ended','selection-audio-ended','mouse-start','mouse-stop','mouse-exit','mouse-options','privacy-revoke']);
 let talking = null, listening = null, chatBusy = false, voiceBusy = false, talkSerial = 0;
 let keyStore=null,costTracker=null,localProvider=null,geminiProvider=null,providerManager=null,geminiSession=null,geminiSessionId='',liveSessionId='';
 let rtConnectionInProgress = false, rtLastStart = 0, liveActive = false;
@@ -50,6 +56,34 @@ const lastPcAlert={cpu:0,memory:0};
 let lastChatAt = 0;
 let desktopVision=null,selectedText=null,windowsDesktop=null,lastDesktopRequest=null,activeDesktopRequest=null,desktopEpoch=0,desktopContext={};
 let selectionPlayback=null,selectionAudioId=0;
+let mouseControl=null,gridListener=null,gridOverlay=null,windowsMouse=null,privacyConsent=null,lastMouseRequest=null,gridListenTimer=null;
+async function executeMouse(command){
+  if(!mouseControl){status('Maussteuerung noch nicht bereit.');return;}
+  try{if(command.action==='stop')stopTalking();const message=await mouseControl.dispatch(command);status(message);return message;}
+  catch(error){const message=String(error.message||'Maussteuerung nicht verfügbar.').slice(0,180);status(message);return message;}
+}
+async function handleMouseLive(event,text){
+  const request=lastMouseRequest,command=typeof text==='string'&&parseMouseCommand(text);
+  if(!controls||event.sender!==controls.webContents||!liveActive||settings.mode==='sleep'||
+    !command||!request||request.used||request.text!==text||Date.now()-request.at>30000)
+    throw Error('Kein aktueller ausdrücklicher Maussteuerbefehl.');
+  request.used=true;return executeMouse(command);
+}
+function scheduleGridListener(){
+  clearTimeout(gridListenTimer);
+  if(!mouseControl?.active()||isQuitting)return;
+  // System.Speech and WebRTC must release their previous microphone owner first.
+  gridListenTimer=setTimeout(()=>{if(mouseControl?.active()&&!liveActive&&!voiceBusy&&settings.mode!=='sleep'){gridListener?.reset();gridListener?.start();}},650);
+}
+async function askPrivacyConsent(kind){
+  const screenData=kind==='screen';
+  const result=await dialog.showMessageBox(controls,{type:'question',title:who()+' – Übertragung erlauben?',
+    message:screenData?'Bild des ausgewählten Monitors zur KI-Auswertung an OpenAI übertragen?':'Markierten Text zum Vorlesen, Erklären oder Zusammenfassen an OpenAI übertragen?',
+    detail:(screenData?'Bildschirminhalte können vertrauliche Daten enthalten. Pro ausdrücklichem Befehl wird genau eine Aufnahme übertragen.':'Markierte Texte können vertrauliche Daten enthalten. Vorlesen überträgt Text an OpenAI TTS; Erklären und Zusammenfassen an das vorhandene OpenAI-Textmodell.')+
+      ' API-Kosten können entstehen. In der App bleiben Bild, Text und Audio nur vorübergehend im Speicher, ohne Inhaltsprotokolle oder Gedächtnis. Für Verarbeitung und Aufbewahrung bei OpenAI gelten dessen Datenschutzregeln. Einmal erlauben gilt ausschließlich für diese Anfrage. Dauerhaft erlauben gilt auf diesem Gerät auch nach App-Neustart, getrennt für Bildschirm und Text, nur für OpenAI. Widerruf jederzeit in den Einstellungen. Weitere Aktionen erfolgen nur nach ausdrücklichem Befehl; keine Hintergrundüberwachung. Dies ist eine Zustimmung der App, keine Windows-Systemberechtigung.',
+    buttons:['Abbrechen','Einmal erlauben','Auf diesem Gerät dauerhaft erlauben'],defaultId:0,cancelId:0,noLink:true});
+  return ['cancel','once','device'][result.response]||'cancel';
+}
 function desktopProvider(){return settings.aiProvider==='auto'?providerManager.activeProvider(liveSessionId)?.id||'auto':settings.aiProvider;}
 async function handleDesktopRequest(question,{isCurrent=()=>true}={}){
   const context={...desktopContext,now:Date.now()},intent=parseDesktopIntent(question,context);
@@ -95,7 +129,7 @@ async function readSelectedAloud(text,{provider,isCurrent}){
   }finally{sendAction('speaking',false);}
 }
 function requireNonDesktopAction(){
-  if(activeDesktopRequest||lastDesktopRequest)throw new Error('Bildschirmfragen erlauben nur Lesen und Erklären.');
+  if(activeDesktopRequest||lastDesktopRequest||lastMouseRequest)throw new Error('Dieser Steuer- oder Lesebefehl erlaubt keine KI-Werkzeuge.');
 }
 async function analyzeLiveDesktop(event,question){
   const request=lastDesktopRequest,session=liveSessionId;
@@ -167,7 +201,7 @@ function commentUsage() {let r={day:'',count:0,lastAt:0};try {r=JSON.parse(fs.re
 function countPaidComment(usage) {fs.writeFileSync(usageFile(),JSON.stringify({...usage,count:usage.count+1,lastAt:Date.now()}));}
 function errorNotice(message) {sendAction('voice-error', String(message).slice(0,320));}
 function stopTalking(cancelDesktop=true,clearContext=true) {
-  if(cancelDesktop){desktopEpoch++;lastDesktopRequest=null;if(clearContext)desktopContext={};sendAction('desktop-cancel');}
+  if(cancelDesktop){mouseControl?.stop();lastMouseRequest=null;desktopEpoch++;lastDesktopRequest=null;if(clearContext)desktopContext={};sendAction('desktop-cancel');}
   selectionPlayback?.finish(false);sendAction('selection-audio-stop');
   talkSerial++;
   if (talking) { talking.stop(); talking = null; }
@@ -189,7 +223,9 @@ async function doChat(text) {
   if (settings.mode === 'sleep') {errorNotice('Der Roboter schläft. Zuerst Aktiv oder Ruhe auswählen.');return;}
   if(isStopCommand(text)){stopTalking();return;}
   const prompt = typeof text === 'string' ? text.trim().slice(0,1200) : '';
-  if (!prompt || chatBusy) return;
+  if (!prompt) return;
+  const mouseCommand=parseMouseCommand(prompt);if(mouseCommand){await executeMouse(mouseCommand);return;}
+  if (chatBusy) return;
   if (Date.now()-lastChatAt < 1200) return;
   lastChatAt = Date.now(); chatBusy = true;
   sendAction('chat-busy',true);sendAction('chat-line',{role:'user',text:prompt});
@@ -268,6 +304,7 @@ async function doChat(text) {
   } finally {chatBusy=false;sendAction('chat-busy',false);}
 }
 async function doListen() {
+  if(mouseControl?.active()){status('Koordinatenmodus hört bereits lokal zu. Zum Gespräch zuerst Koordinatennetz beenden.');return;}
   if (voiceBusy || chatBusy || liveActive || settings.mode === 'sleep') return;
   voiceBusy=true;syncWakeListener();status('🎤 Ich höre zu … Sprich jetzt einen kurzen Satz.');
   listening=listenOnce();
@@ -306,6 +343,7 @@ function sendState(win) {
     {
       win.webContents.send('robot:state', settings);
       win.webContents.send('robot:action',{action:'wake-status',value:wakeStatus});
+      if(win===controls&&mouseControl)win.webContents.send('robot:action',{action:'mouse-state',value:mouseControl.state()});
       if(win===controls && memoryFile) win.webContents.send('robot:action',{action:'memory-list',value:readNotes(memoryFile)});
     }
 }
@@ -398,7 +436,7 @@ function gestureRobot(gesture) {
   clearHideTimer(); autoShowing = false; robotVisible = true; sendAction('gesture', gesture); updateMousePassThrough();
 }
 function spontaneousComment(customPhrase=null) {
-  if (!canSpontaneouslyComment(settings) || chatBusy || voiceBusy || liveActive || commentInProgress) return;
+  if (!canSpontaneouslyComment(settings) || chatBusy || voiceBusy || liveActive || mouseControl?.active() || commentInProgress) return;
   clearHideTimer(); autoShowing=true; robotVisible=true; updateMousePassThrough();
   const validCustom=customPhrase && typeof customPhrase.text==='string' && GESTURES.includes(customPhrase.gesture);
   let phrase=validCustom?customPhrase:pickPhrase(Math.random,settings.character);
@@ -430,7 +468,7 @@ function spontaneousComment(customPhrase=null) {
 }
 
 async function checkPcAlerts(){
-  if(pcBusy || !settings?.pcAlertsEnabled || !canSpontaneouslyComment(settings) || liveActive || commentInProgress || robotVisible)return;
+  if(pcBusy || !settings?.pcAlertsEnabled || !canSpontaneouslyComment(settings) || liveActive || mouseControl?.active() || commentInProgress || robotVisible)return;
   pcBusy=true;
   try{
     const snapshot=await systemSnapshot();
@@ -457,17 +495,18 @@ function setWakeStatus(message) {
 }
 function syncWakeListener() {
   if (!wakeListener) return;
-  const wanted=Boolean(settings.wakeEnabled && settings.mode!=='sleep' && !liveActive && !voiceBusy);
+  const wanted=Boolean(settings.wakeEnabled && settings.mode!=='sleep' && !isQuitting && !liveActive && !voiceBusy && !mouseControl?.active());
   if (wanted) wakeListener.start();
   else {
     wakeListener.stop();
     if (!settings.wakeEnabled) setWakeStatus('Codewort ausgeschaltet. Hintergrundmikrofon aus.');
     else if (settings.mode==='sleep') setWakeStatus('Schlafmodus: Codewort und Mikrofon aus.');
+    else if(mouseControl?.active())setWakeStatus('Koordinatenmodus: lokale Rasterbefehle aktiv; Codewort für Live pausiert.');
     else if (liveActive) setWakeStatus('Live-Gespräch läuft. Codewort-Erkennung pausiert.');
   }
 }
 function onWakeDetected() {
-  if (settings.mode==='sleep' || !settings.wakeEnabled || liveActive) return;
+  if (settings.mode==='sleep' || !settings.wakeEnabled || liveActive || mouseControl?.active()) return;
   if (wakeTestUntil && Date.now() < wakeTestUntil) {
     wakeTestUntil=0; clearTimeout(wakeTestTimer);
     showRobot();
@@ -493,8 +532,8 @@ function onWakeDetected() {
 }
 function setMode(mode) {
   if (!MODES.includes(mode)) return;
-  if(mode==='sleep'){wakeTestUntil=0;clearTimeout(wakeTestTimer);}
   settings.mode = mode;
+  if(mode==='sleep'){mouseControl?.exit();wakeTestUntil=0;clearTimeout(wakeTestTimer);}
   if (mode === 'sleep') { liveActive=false; sendAction('realtime-stop'); if (listening) {listening.stop(); listening=null;} stopTalking();chatBusy=false;voiceBusy=false;hideRobot();status('😴 Schlafmodus – keine Sprache, kein Mikrofon.'); }
   else if (mode !== 'active' && autoShowing && !liveActive) {stopTalking();hideRobot();}
   storeSoon(); syncState(); scheduleNextComment(); syncWakeListener();
@@ -517,6 +556,7 @@ function setWakeEnabled(enabled) {
 function testWakeWord() {
   if(!settings.wakeEnabled){setWakeStatus('Erst „Im Hintergrund auf '+who()+' warten“ aktivieren.');return;}
   if(settings.mode==='sleep'){setWakeStatus('Im Schlafmodus ist das Mikrofon ausgeschaltet.');return;}
+  if(mouseControl?.active()){setWakeStatus('Erst Koordinatennetz beenden, dann Codewort testen.');return;}
   if(liveActive){setWakeStatus('Erst Live-Gespräch beenden, dann Codewort testen.');return;}
   if(!wakeListener || wakeListener.failed){setWakeStatus('Erkenner nicht bereit. Den Codewort-Schalter aus- und wieder einschalten; danach Fehlermeldung prüfen.');return;}
   wakeTestUntil=Date.now()+15000;
@@ -560,6 +600,19 @@ function handleAction(event, payload) {
   if (!controls || event.sender !== controls.webContents ||
       !payload || !ALLOWED.has(payload.action)) return;
   const {action, value} = payload;
+  if(action==='mouse-stop'){void executeMouse({action:'stop'});return;}
+  if(action==='mouse-start'){void executeMouse({action:'show',target:{kind:'auto'}});return;}
+  if(action==='mouse-exit'){mouseControl?.exit();return;}
+  if(action==='mouse-options'){
+    if(!value||typeof value!=='object')return;
+    settings=normalizeSettings({...settings,mouseGridOpacity:value.opacity??settings.mouseGridOpacity,mouseSpeed:value.speed??settings.mouseSpeed,mouseGridMaxDepth:value.maxDepth??settings.mouseGridMaxDepth});
+    mouseControl?.reconfigure();storeSoon();syncState();return;
+  }
+  if(action==='privacy-revoke'){
+    if(value!=='screen'&&value!=='text')return;
+    stopTalking();try{privacyConsent?.revoke(value);status('Dauerhafte Zustimmung widerrufen. Künftige Cloud-Anfragen fragen wieder nach.');}
+    catch{settings.privacyConsents={...settings.privacyConsents,[value]:{}};syncState();storeSoon();errorNotice('Widerruf gilt jetzt. Speichern fehlgeschlagen: Einstellungen-Datei prüfen, bevor die App neu gestartet wird.');}return;
+  }
   if(action==='selection-audio-ended'){if(value?.id===selectionPlayback?.id)selectionPlayback.finish(value.ok===true);return;}
   if (action === 'comment-audio-ended') {
     commentInProgress=false;sendAction('speaking',false);
@@ -571,7 +624,7 @@ function handleAction(event, payload) {
     const kind = value.kind;
     if (kind === 'opened') {
       stopTalking();
-      if (settings.mode === 'sleep') {sendAction('realtime-stop');return;}
+      if (settings.mode === 'sleep'||mouseControl?.active()) {sendAction('realtime-stop');scheduleGridListener();return;}
       if(!liveSessionId)liveSessionId='live-'+Date.now();
       liveActive=true;webCalls=0;lastWebCall=0;browserCalls=0;lastBrowserCall=0;appLaunches=0;pcStatusCalls=0;lastAppRequest=null;lastSpokenAt=0;lastUserTranscript="";lastDesktopRequest=null;
       syncWakeListener();updateMenu();
@@ -579,7 +632,7 @@ function handleAction(event, payload) {
       sendAction('show');updateMousePassThrough();
     } else if (kind === 'closed') {
       stopGemini('Renderer geschlossen');providerManager?.endSession(liveSessionId);liveSessionId='';
-      liveActive=false;lastDesktopRequest=null;stopTalking();
+      liveActive=false;lastDesktopRequest=null;stopTalking();scheduleGridListener();
       if (tray) updateMenu();
       sendAction('speaking',false);
       if (autoShowing && robotVisible) hideRobot();
@@ -591,6 +644,9 @@ function handleAction(event, payload) {
         const phrase = typeof value.text === 'string' ? value.text.trim().slice(0,1000) : '';
         if (!phrase) return;
         if(kind==='user'){
+          const mouseCommand=parseMouseCommand(phrase);
+          if(mouseCommand){lastMouseRequest={text:phrase,at:Date.now(),used:false};lastDesktopRequest=null;lastAppRequest=null;return;}
+          lastMouseRequest=null;
           if(isStopCommand(phrase))stopTalking();
           else if(activeDesktopRequest)return;
           if(!isDesktopRequest(phrase))desktopContext={};
@@ -612,7 +668,7 @@ function handleAction(event, payload) {
         sendAction('show');sendAction('speaking',true);updateMousePassThrough();
       } else if (kind === 'user-speaking') {
         if(activeDesktopRequest)return;
-        stopTalking(false,false);lastSpokenAt=Date.now();lastAppRequest=null;lastUserTranscript='';lastDesktopRequest=null;
+        stopTalking(false,false);lastSpokenAt=Date.now();lastAppRequest=null;lastMouseRequest=null;lastUserTranscript='';lastDesktopRequest=null;
         robotVisible=true;autoShowing=true;clearHideTimer();
         sendAction('show');sendAction('speaking',false);updateMousePassThrough();
       } else if (kind === 'idle') {
@@ -628,6 +684,7 @@ function handleAction(event, payload) {
   }
   if (action === 'character') {
     if(!Object.hasOwn(CHARACTERS,value)||value===settings.character)return;
+    mouseControl?.exit();
     // Keine live audio Sitzung mit falscher visueller Identität weiterlaufen lassen.
     if(liveActive){sendAction('realtime-stop');stopGemini('Charakterwechsel');liveActive=false;}
     if(wakeListener){wakeListener.stop();wakeListener.reset();}
@@ -671,7 +728,7 @@ function handleAction(event, payload) {
   else if (action === 'ai-provider' && AI_PROVIDERS.includes(value)) {
     stopTalking();
     if(liveActive){sendAction('realtime-stop');stopGemini('Anbieterwechsel');liveActive=false;}
-    settings.aiProvider=value;messages=[];storeSoon();syncState();sendProviderStatus();status(`KI-Modus: ${value}`);
+    mouseControl?.exit();settings.aiProvider=value;messages=[];storeSoon();syncState();sendProviderStatus();status(`KI-Modus: ${value}`);
   } else if(action==='local-base-url'||action==='local-model'||action==='gemini-model'||action==='monthly-budget'||action==='auto-paid-fallback'||action==='block-paid-budget'||action==='pricing'){
     const patch={...settings};
     if(action==='local-base-url')patch.localBaseUrl=value;
@@ -753,16 +810,25 @@ else {
       title:who()+' – Einstellungen', backgroundColor:'#142027', show:true}, 'controls');
     controls.on('close', event => { if (!isQuitting) { event.preventDefault(); controls.hide(); } });
     windowsDesktop=createWindowsDesktop();windowsDesktop.start();
+    privacyConsent=createPrivacyConsent({getSaved:()=>settings.privacyConsents,ask:askPrivacyConsent,
+      save:consents=>{const next=normalizeSettings({...settings,privacyConsents:consents});try{fs.writeFileSync(file,JSON.stringify(next,null,2),'utf8');}catch{throw Error('Datenschutzentscheidung konnte nicht gespeichert werden. Bitte das lokale App-Profil prüfen.');}settings=next;syncState();}});
+    gridOverlay=createGridOverlay({BrowserWindow,screen});
+    windowsMouse=createWindowsMouse({onStatus:message=>sendAction('mouse-status',message)});
+    gridListener=createGridListener({onCommand:command=>{if(mouseControl?.active()&&settings.mode!=='sleep')void executeMouse(command);},onStatus:message=>{
+      // Loss of local voice recognition also stops motion; the large UI stop remains available.
+      if(!message.startsWith('Lokale Rasterbefehle bereit.'))mouseControl?.stop();sendAction('mouse-status',message);
+    }});
+    mouseControl=createMouseControl({getSnapshot:()=>windowsDesktop.snapshot(),
+      getOptions:()=>({opacity:settings.mouseGridOpacity,speed:settings.mouseSpeed,maxDepth:settings.mouseGridMaxDepth}),
+      setOpacity:value=>{settings.mouseGridOpacity=value;storeSoon();syncState();},mouse:windowsMouse,isAllowed:()=>settings.mode!=='sleep'&&!isQuitting,
+      onChange:state=>{sendAction('mouse-state',state);gridOverlay.publish(state);},
+      onActivate:()=>{stopTalking();if(listening){listening.stop();listening=null;voiceBusy=false;}sendAction('realtime-stop');stopGemini('Koordinatenmodus');syncWakeListener();scheduleGridListener();},
+      onDeactivate:()=>{clearTimeout(gridListenTimer);gridListener.stop();windowsMouse.close();syncWakeListener();}
+    });
     desktopVision=createDesktopVision({
       getSnapshot:()=>windowsDesktop.snapshot(),getProvider:desktopProvider,
       getKey:readAPIKey,isAllowed:()=>settings.mode!=='sleep',checkBudget:requirePaidBudget,
-      requestConsent:async()=>{
-        const choice=await dialog.showMessageBox({type:'question',title:who()+' – Bildschirmaufnahme erlauben?',
-          message:'Darf eine Aufnahme des ausgewählten Bildschirms an OpenAI gesendet werden?',
-          detail:'Dein Bildschirm kann Passwörter, Nachrichten und andere vertrauliche Daten enthalten. Auf jeden ausdrücklichen Bildschirmbefehl wird genau ein Bild zur kostenpflichtigen KI-Auswertung an OpenAI übertragen. Bilder werden in der App nur kurz im Arbeitsspeicher gehalten und weder als Datei noch in Logs gespeichert. Für die Verarbeitung und mögliche Aufbewahrung durch OpenAI gelten dessen Datenschutzregeln. Es gibt keine dauerhafte Überwachung und keine Computeraktionen. Diese Zustimmung gilt bis zum Beenden der App. Schließe vertrauliche Inhalte vor dem Fortfahren.',
-          buttons:['Abbrechen','Zustimmen'],defaultId:0,cancelId:0,noLink:true});
-        return choice.response===1;
-      },
+      requestConsent:()=>privacyConsent.authorize('screen',desktopProvider()),
       onStatus:message=>{status(message);sendAction('desktop-status',message);sendAction('comment',{gesture:'think',text:message});},
       onUsage:usage=>{costTracker.record({sessionId:liveSessionId||'desktop-'+Date.now(),...usage});sendProviderStatus();}
     });
@@ -773,12 +839,7 @@ else {
         const result=await localProvider.reply({baseUrl:settings.localBaseUrl,model:settings.localModel,instruction,input,history:[]});
         costTracker.record({sessionId:liveSessionId||'selection-'+Date.now(),provider:'local',model:settings.localModel,category:'text',...result.usage});sendProviderStatus();return result.text;
       },
-      requestConsent:async()=>{
-        const result=await dialog.showMessageBox({type:'question',title:who()+' – Textauswahl übertragen?',
-          message:'Darf ausdrücklich ausgewählter Text zum Vorlesen, Erklären oder Zusammenfassen an OpenAI übertragen werden?',
-          detail:'Vorlesen nutzt nur die vorhandene OpenAI-Sprachausgabe mit deiner Charakterstimme; Erklären und Zusammenfassen nutzt das bestehende Textmodell. Dies verursacht API-Kosten und kann vertrauliche Daten übertragen. Text und Audio bleiben in der App nur vorübergehend im Speicher, ohne Logs oder Gedächtnis. Für die Verarbeitung und Aufbewahrung bei OpenAI gelten dessen Datenschutzregeln. Diese gesonderte Zustimmung gilt nur bis zum Beenden der App. Es wird kein Screenshot als Ersatz erstellt.',
-          buttons:['Abbrechen','Zustimmen'],defaultId:0,cancelId:0,noLink:true});return result.response===1;
-      },
+      requestConsent:provider=>privacyConsent.authorize('text',provider),
       onUsage:usage=>{costTracker.record({sessionId:liveSessionId||'selection-'+Date.now(),...usage});sendProviderStatus();}
     });
     // Schließen versteckt die Einstellungen, das laufende Gespräch kann im Hintergrund fortgesetzt werden.
@@ -794,10 +855,11 @@ else {
       wc === controls.webContents && permission === 'media' && settings.mode !== 'sleep');
     ipcMain.on('robot:action', handleAction);
     ipcMain.handle('robot:inspect-desktop',analyzeLiveDesktop);
+    ipcMain.handle('robot:mouse-command',handleMouseLive);
     ipcMain.handle('robot:provider-status',event=>{if(event.sender!==controls.webContents)throw new Error('Nicht zugelassene Anfrage.');return providerStatus();});
     ipcMain.handle('robot:local-models',async(event,baseUrl)=>{if(event.sender!==controls.webContents)throw new Error('Nicht zugelassene Anfrage.');return localProvider.listModels(baseUrl);});
     ipcMain.handle('robot:gemini-start',async(event)=>{
-      if(event.sender!==controls.webContents||settings.mode==='sleep')throw new Error('Gemini Live ist im Schlafmodus nicht verfügbar.');
+      if(event.sender!==controls.webContents||settings.mode==='sleep'||mouseControl?.active())throw new Error('Gemini Live ist im Schlafmodus nicht verfügbar.');
       if(selectedRealtimeProvider()!=='gemini')throw new Error('Gemini ist nicht als aktueller Audioanbieter ausgewählt.');
       if(!geminiProvider)throw new Error('Diese Laufzeit unterstützt Gemini WebSocket nicht.');
       if(geminiSession)throw new Error('Gemini-Sitzung läuft bereits.');
@@ -820,7 +882,7 @@ else {
     });
     ipcMain.handle('robot:gemini-stop',(event,sessionId)=>{if(event.sender!==controls.webContents)throw new Error('Nicht zugelassene Anfrage.');if(sessionId===geminiSessionId)stopGemini('Nutzerstopp');return true;});
     ipcMain.handle('robot:realtime-connect', async (event, offerSDP) => {
-      if (event.sender !== controls.webContents || settings.mode === 'sleep')
+      if (event.sender !== controls.webContents || settings.mode === 'sleep' || mouseControl?.active())
         throw new Error('Live-Gespräch nur im aktiven Einstellungsfenster möglich.');
       // Die Stimme darf auch bei verstecktem Einstellungsfenster gestartet werden (Codewort).
       if(selectedRealtimeProvider()!=='openai')throw new Error('OpenAI ist nicht als aktueller Audioanbieter ausgewählt.');
@@ -924,6 +986,7 @@ Nur dieses Programm wird geöffnet.`,
     if (!toggleKeyRegistered) console.warn('Tastenkombination Strg+Alt+Leertaste ist bereits belegt.');
     screen.on('display-metrics-changed', positionOverlay);
     screen.on('display-removed', positionOverlay);
+    for(const event of ['display-added','display-removed','display-metrics-changed'])screen.on(event,()=>mouseControl?.topologyChanged());
     wakeListener=new LocalWakeListener(onWakeDetected,setWakeStatus,()=>settings.wakeSensitivity,()=>settings.character);
     syncWakeListener();
     scheduleNextComment();
@@ -934,6 +997,7 @@ Nur dieses Programm wird geöffnet.`,
     if (settings && file) { try { fs.writeFileSync(file, JSON.stringify(settings, null, 2), 'utf8'); } catch {} }
     if (wakeListener) wakeListener.stop();
     clearTimeout(wakeTestTimer);
+    mouseControl?.exit();clearTimeout(gridListenTimer);gridListener?.stop();windowsMouse?.close();gridOverlay?.close();
     windowsDesktop?.stop();if (listening) listening.stop();stopTalking();stopGemini('App beendet');
     clearTimeout(commentTimer); clearHideTimer(); clearInterval(hitCheckTimer);clearInterval(pcMonitor); globalShortcut.unregisterAll();
   });

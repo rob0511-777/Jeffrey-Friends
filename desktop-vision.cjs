@@ -32,7 +32,7 @@ async function capturePrimaryScreen({platform=process.platform,execFileImpl=exec
 
 function createDesktopVision({platform=process.platform,getProvider,getKey,isAllowed,checkBudget,requestConsent,
   capture=capturePrimaryScreen,getSnapshot,fetchImpl=globalThis.fetch,onStatus=()=>{},onUsage=()=>{}}) {
-  let consent=false,busy=false;
+  let busy=false;
   return Object.freeze({
     async analyze(question,{isCurrent=()=>true,context}={}) {
       if(!isDesktopCommand(question,context))throw new Error('Bildschirmaufnahme benötigt einen ausdrücklichen Desktop-Befehl.');
@@ -58,11 +58,8 @@ function createDesktopVision({platform=process.platform,getProvider,getKey,isAll
           if(snapshot)monitor=selectMonitor(snapshot,target);
         }
         check();
-        if(!consent){
-          onStatus('Bildschirmaufnahme wartet auf deine Zustimmung im Datenschutzdialog.');
-          if(await requestConsent()!==true)throw new Error('Bildschirmaufnahme abgebrochen: keine Zustimmung zur Cloud-Übertragung.');
-          consent=true;
-        }
+        onStatus('Freigabe für diese Bildschirmübertragung wird geprüft.');
+        if(await requestConsent()!==true)throw new Error('Bildschirmaufnahme abgebrochen: keine Zustimmung zur Cloud-Übertragung.');
         check();checkBudget();
         onStatus('Bildschirmaufnahme: '+(monitor?'Monitor DISPLAY'+monitor.number:'Der primäre Bildschirm')+' wird aufgenommen.');
         image=await capture(monitor?{bounds:monitor.bounds}:undefined);

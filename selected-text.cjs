@@ -4,7 +4,7 @@ const {safeSelectionDiagnostic}=require('./windows-desktop.cjs');
 const MAX_SELECTION=24000;
 function createSelectedText({getProvider,getKey,isAllowed,checkBudget,readSelection,requestConsent,readAloud,localReply,
   fetchImpl=globalThis.fetch,onUsage=()=>{}}){
-  const consent=new Set();let busy=false;
+  let busy=false;
   return Object.freeze({async execute(action,{isCurrent=()=>true,handle}={}){
     if(!['read','explain','summarize'].includes(action))throw Error('Kein ausdrücklicher Textauswahlbefehl.');
     if(busy)throw Error('Eine Textauswahl wird bereits verarbeitet.');busy=true;
@@ -39,10 +39,7 @@ function createSelectedText({getProvider,getKey,isAllowed,checkBudget,readSelect
       if(provider==='offline'&&action!=='read')throw Error('Zum Erklären oder Zusammenfassen bitte ein geeignetes lokales Modell oder OpenAI auswählen.');
       if(provider==='openai'){
         if(!getKey())throw Error('Der OpenAI-API-Schlüssel fehlt.');checkBudget();
-        if(!consent.has(provider)){
-          if(await requestConsent(provider,action)!==true)throw Error('Textauswahl abgebrochen: keine Zustimmung zur Cloud-Übertragung.');
-          check();consent.add(provider);
-        }
+        if(await requestConsent(provider,action)!==true)throw Error('Textauswahl abgebrochen: keine Zustimmung zur Cloud-Übertragung.');
         check();checkBudget();
       }
       if(action==='read'){

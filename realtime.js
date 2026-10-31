@@ -11,7 +11,7 @@
   if (!startButton || !stopButton) return;
 
   let current = null;
-  let isSleeping = false;
+  let isSleeping = false,mouseActive=false;
   let activeCharacter='jeffrey';
   let activeProvider='openai';
   let broncoVoiceEffect='hard';
@@ -27,7 +27,7 @@
   }
   function setButtons() {
     const active=Boolean(current);
-    startButton.disabled=active || isSleeping || !native || mode !== 'controls';
+    startButton.disabled=active || isSleeping || mouseActive || !native || mode !== 'controls';
     stopButton.disabled=!active;
   }
   let selectionAudio=null;
@@ -98,7 +98,7 @@
     }
   }
   function desktopInFlight(c){
-    return Boolean(c.desktopPending||c.desktopReply||c.desktopReadoutEventId||c.desktopReadoutResponseId);
+    return Boolean(c.mousePending||c.desktopPending||c.desktopReply||c.desktopReadoutEventId||c.desktopReadoutResponseId);
   }
   function cancelDesktop(c,force=false){
     if(!c||(!force&&!desktopInFlight(c)&&!c.desktopBlocked))return;
@@ -245,6 +245,11 @@
         // Speech detection, duplicate commands and incidental transcripts are not
         // a cancellation request and cannot authorize tools during this turn.
         if(desktopInFlight(c))return;
+        if(window.RobotMouseCommands?.parseMouseCommand(event.transcript)){
+          c.desktopBlocked=true;c.mousePending=true;c.toolsInFlight++;extendConversation(c);signal('user',event.transcript);
+          if(c.responseId){(c.desktopCancelled||(c.desktopCancelled=new Set())).add(c.responseId);c.dc?.send(JSON.stringify({type:'response.cancel',response_id:c.responseId}));}
+          void native.mouseCommand(event.transcript.trim()).then(message=>{if(current===c&&!c.stopped)status(message);}).catch(()=>{if(current===c&&!c.stopped)fail('Maussteuerbefehl nicht verfügbar.');}).finally(()=>{c.mousePending=false;c.toolsInFlight=Math.max(0,c.toolsInFlight-1);extendConversation(c);});return;
+        }
         c.desktopBlocked=false;
         if(/(?:\bmerk(?:e)?\s+(?:dir\s+)?|\bspeicher(?:e)?\s+)/i.test(event.transcript))c.rememberTranscriptSeen=true;
         c.appTranscriptSeen=true;
@@ -321,7 +326,7 @@
     }catch(error){if(current===c)cleanup(String(error?.message||error||'Gemini Live fehlgeschlagen.'),false);}
   }
   async function start(fromWake=false) {
-    if (!native || mode!=='controls' || current || isSleeping) return;
+    if (!native || mode!=='controls' || current || isSleeping || mouseActive) return;
     errorBox.hidden=true;
     try{const state=await native.getProviderStatus();activeProvider=state.activeProvider||'openai';}catch{activeProvider='openai';}
     if(activeProvider==='local'||activeProvider==='auto'){fail('Der lokale Modus bietet Text, aber kein vollständiges Realtime-Audio.');return;}
@@ -475,6 +480,7 @@
       else if(message.type==='user'){
         c.desktopGeneration=(c.desktopGeneration||0)+1;c.desktopBlocked=false;c.userSpeaking=false;signal('user',message.text);extendConversation(c);
         if(window.RobotVoiceCommands?.isStopCommand(message.text)){native.send('stop-speaking');cleanup('Vorlesen gestoppt. Mikrofon aus.');return;}
+        if(window.RobotMouseCommands?.parseMouseCommand(message.text)){c.desktopBlocked=true;void native.mouseCommand(message.text.trim()).catch(()=>fail('Maussteuerbefehl nicht verfügbar.'));return;}
         if(window.RobotVoiceCommands?.isDesktopRequest(message.text))void inspectDesktop(message.text,c);
       }
       else if(message.type==='reply'){if(!c.desktopBlocked)signal('reply',message.text);extendConversation(c);}
@@ -483,11 +489,12 @@
       else if(message.type==='closed'){const reason=String(message.reason||'').trim();cleanup('Gemini Live beendet (Code '+String(message.code||0)+')'+(reason?': '+reason:'')+'. Mikrofon aus.',false);}
     });
     native.onAction(({action,value})=>{
+      if(action==='mouse-state'){mouseActive=Boolean(value?.active);if(mouseActive)cleanup('Koordinatenmodus: Live geschlossen, lokale Rasterbefehle aktiv.');setButtons();}
       if(action==='desktop-cancel')cancelDesktop(current);
       if(action==='desktop-status'&&current?.desktopPending)status(value);
       if(action==='selection-audio')void playSelectionAudio(value);
       if(action==='selection-audio-stop')stopSelectionAudio();
-      if(action==='realtime-stop')cleanup('Schlafmodus: Sprachverbindung geschlossen.');
+      if(action==='realtime-stop')cleanup('Sprachverbindung geschlossen. Mikrofon für Live aus.');
       if(action==='realtime-start')start(Boolean(value?.fromWake));
       if(action==='mode') {isSleeping=value==='sleep';if(isSleeping)cleanup('Schlafmodus. Mikrofon aus.');setButtons();}
     });

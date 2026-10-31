@@ -373,7 +373,7 @@ test('Renderer erhält ausstehende Analyse auch ohne neuen endgültigen Text nac
   renderer.event({type:'response.created',response:{id:'readout',metadata:{desktop:'readout'}}});
   renderer.event({type:'response.done',response:{id:'readout',status:'completed'}});assertNormalConversation(renderer,main);
 });
-test('Erneute Bildschirmfragen nach echtem 45-Sekunden-Idle behalten Zustimmung nur im App-Prozess',async()=>{
+test('Erneute Bildschirmfragen nach 45-Sekunden-Idle benötigen ohne Dauerfreigabe neue Zustimmung',async()=>{
   const f=desktopRegression('none'),main=mainHarness(f.service);
   for(let session=0;session<3;session++){
     main.api.handleAction({sender:main.sender},{action:'realtime-activity',value:{kind:'opened'}});
@@ -384,7 +384,7 @@ test('Erneute Bildschirmfragen nach echtem 45-Sekunden-Idle behalten Zustimmung 
     renderer.event({type:'response.done',response:{id:'readout',status:'completed'}});
     renderer.fireIdle();assert.equal(renderer.c.stopped,true);
   }
-  assert.equal(f.calls.consent,1);assert.equal(f.calls.capture,3);assert.equal(f.calls.fetch,3);
+  assert.equal(f.calls.consent,3);assert.equal(f.calls.capture,3);assert.equal(f.calls.fetch,3);
   const restarted=desktopRegression('none'),newMain=mainHarness(restarted.service),newRenderer=rendererHarness(newMain);
   newRenderer.event({type:'conversation.item.input_audio_transcription.completed',item_id:'restart',transcript:'Jeffrey, was siehst du'});await tick();assert.equal(restarted.calls.consent,1);
 });
@@ -485,4 +485,20 @@ test('KI-Modus-Wechsel bricht auch eine laufende lokale Windows-Sprachausgabe ab
   const task=main.api.readSelectedAloud('Wort '.repeat(300),{provider:'offline',isCurrent:()=>true});
   main.api.handleAction({sender:main.sender},{action:'ai-provider',value:'local'});
   await assert.rejects(task,/abgebrochen/);assert.equal(main.spoken.length,1);
+});
+
+test('Dauerhafte Bildschirmzustimmung überlebt drei 45-Sekunden-Disconnects und neuen App-Zustand; Widerruf verhindert neue Aufnahme',async()=>{
+  const {createPrivacyConsent}=require('../privacy-consent.cjs'),{createDesktopVision}=require('../desktop-vision.cjs');
+  let saved={},dialogs=0,captures=0;
+  const options={getSaved:()=>saved,save:next=>{saved=JSON.parse(JSON.stringify(next));},ask:async()=>{dialogs++;return dialogs===1?'device':'cancel';}};
+  let consent=createPrivacyConsent(options);
+  const makeService=()=>createDesktopVision({platform:'win32',getProvider:()=> 'openai',getKey:()=> 'mock',isAllowed:()=>true,checkBudget(){},requestConsent:()=>consent.authorize('screen','openai'),capture:async()=>{captures++;return Buffer.from([255,216]);},fetchImpl:async()=>({ok:true,json:async()=>({output_text:'Testbild'})})});
+  const main=mainHarness(makeService());
+  for(let i=0;i<3;i++){
+    main.api.handleAction({sender:main.sender},{action:'realtime-activity',value:{kind:'opened'}});
+    const renderer=rendererHarness(main);renderer.event({type:'conversation.item.input_audio_transcription.completed',item_id:'ask',transcript:'Schau mal'});await tick();
+    renderer.event({type:'response.created',response:{id:'readout',metadata:{desktop:'readout'}}});renderer.event({type:'response.done',response:{id:'readout',status:'completed'}});renderer.fireIdle();assert.equal(renderer.c.stopped,true);
+  }
+  consent=createPrivacyConsent(options);const newMain=mainHarness(makeService()),renderer=rendererHarness(newMain);renderer.event({type:'conversation.item.input_audio_transcription.completed',item_id:'restart',transcript:'Schau mal'});await tick();assert.equal(captures,4);assert.equal(dialogs,1);
+  consent.revoke('screen');await assert.rejects(makeService().analyze('Schau mal'),/keine Zustimmung/);assert.equal(captures,4);assert.equal(dialogs,2);
 });
